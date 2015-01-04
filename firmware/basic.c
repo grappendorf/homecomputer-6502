@@ -13,6 +13,7 @@
 #define syntax_error_malformed_string() syntax_error_msg("Malformed string argument!")
 char argbuf[40];
 char loadbuf[40];
+char inputbuf[43];
 
 typedef void (* command_function) ();
 
@@ -38,6 +39,7 @@ const char const * keywords[] = {
   "let",
   "clear",
   "vars",
+  "input",
   0
 };
 
@@ -60,6 +62,7 @@ void cmd_synth(const char *args);
 void cmd_let(const char *args);
 void cmd_clear(const char *args);
 void cmd_vars(const char *args);
+void cmd_input(const char *args);
 
 const command_function command_functions[] = {
   cmd_goto,
@@ -80,7 +83,8 @@ const command_function command_functions[] = {
   cmd_synth,
   cmd_let,
   cmd_clear,
-  cmd_vars
+  cmd_vars,
+  cmd_input
 };
 
 char print_buffer[41];
@@ -548,6 +552,7 @@ void cmd_free(const char *) {
 
 void cmd_save(const char * args) {
   program_line *line;
+  lcd_puts("Saving...");
   acia_puts("*SAVE ");
   acia_puts(args);
   acia_puts("\n");
@@ -556,8 +561,10 @@ void cmd_save(const char * args) {
     sprintf(print_buffer, "%u %s %s\n", line->number, keywords[line->command], line->args);
     acia_puts(print_buffer);
     line = line->next;
+    lcd_putc('.');
   }
   acia_puts("*EOF\n");
+  lcd_puts("\nOk.\n");
 }
 
 void cmd_load(const char * args) {
@@ -621,7 +628,7 @@ void cmd_let(const char *args) {
     name = *args;
     ++args;
     if (isalnum(*args)) {
-      name << 8;
+      name <<= 8;
       name |= *args;
       ++args;
     }
@@ -677,5 +684,47 @@ void cmd_vars(const char *) {
     print_variable(v, VAR_PRINT_VERBOSE);
     lcd_put_newline();
     v = v->next;
+  }
+}
+
+/**
+ * Input a variable from the keyboard.
+ */
+void cmd_input(const char *args) {
+  unsigned char last_key = 0xff;
+  char last_char = 0;
+  char *p;
+  if (isalpha(*args)) {
+    unsigned int name = *args;
+    ++args;
+    if (isalnum(*args)) {
+      name <<= 8;
+      name |= *args;
+    }
+    p = inputbuf;
+    *p = '"';
+    ++p;
+    for (;;) {
+      keys_update();
+      if (keys_get_code() != 0xff) {
+        if (last_key == 0xff) {
+          last_key = keys_get_code();
+          if (keys_getc() == '\n') {
+            *p = '"';
+            ++p;
+            *p = '\0';
+            lcd_put_newline();
+            break;
+          } else if (p - inputbuf < 40) {
+            lcd_putc(keys_getc());
+            *p = keys_getc();
+            ++p;
+          }
+        }
+      } else {
+        last_key = 0xff;
+      }
+    }
+    create_variable(name, VAR_TYPE_STRING, inputbuf);
   }
 }
