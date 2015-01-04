@@ -47,7 +47,7 @@ int main() {
           lcd_putc(last_char);
           if (last_char == '\n') {
             *buffer_pos = '\0';
-            parse(buffer);
+            interpret(buffer);
             buffer_pos = buffer;
           } else {
             *buffer_pos = last_char;

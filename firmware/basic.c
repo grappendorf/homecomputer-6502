@@ -183,7 +183,7 @@ void create_line(unsigned int line_number, char *s) {
   }
 }
 
-void parse(char *s) {
+void interpret(char *s) {
   char * command = s;
   unsigned int line_number;
 
@@ -344,7 +344,7 @@ void cmd_load(const char * args) {
       break;
     } else {
       lcd_putc('.');
-      parse(loadbuf);
+      interpret(loadbuf);
     }
   }
   lcd_puts("\nOk.\n");
