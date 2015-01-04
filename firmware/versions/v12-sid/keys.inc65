@@ -1,0 +1,6 @@
+.importzp KEYS_CODE
+.importzp KEYS_MODIFIERS
+
+.import keys_init
+.import keys_update
+.import keys_getchar

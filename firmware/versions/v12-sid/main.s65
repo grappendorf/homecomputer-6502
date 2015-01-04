@@ -1,0 +1,131 @@
+                .setcpu "6502"
+
+                .include "macros.inc65"
+                .include "zeropage.inc65"
+                .include "string.inc65"
+                .include "tools.inc65"
+                .include "io.inc65"
+                .include "sid.inc65"
+                .include "lcd.inc65"
+                .include "keys.inc65"
+
+                .segment "VECTORS"
+
+                .word   nmi
+                .word   reset
+                .word   irq
+
+                .bss
+
+                BUFFER_LENGTH = 80
+buffer:         .res BUFFER_LENGTH + 1, 0
+
+                .code
+
+reset:          jmp main
+
+nmi:            rti
+
+irq:            rti
+
+main:           cld
+                ldx #$ff
+                txs
+
+                jsr sid_init
+                jsr keys_init
+                jsr lcd_init
+
+                ld16 R0, msg_welcome
+                jsr lcd_puts
+
+                lda #$09
+                sta SID_VOICE1_AD
+                lda #$8A
+                sta SID_VOICE1_SR
+                lda #$0f
+                sta SID_MODE_VOLUME
+@read_keys:     jsr keys_update
+                jsr keys_getchar
+                bne @key_pressed
+                lda #$20
+                sta SID_VOICE1_CTRL
+@key_pressed:   cmp #$1b
+                bne @check_note
+                lda #$00
+                sta SID_MODE_VOLUME
+                rts
+@check_note:    cmp #'a'
+                bcc @read_keys
+                cmp #('z' + 1)
+                bcs @read_keys
+                sec
+                sbc #'a'
+                tax
+                lda notes_hi,x
+                beq @read_keys
+                sta SID_VOICE1_FREQ_H
+                lda notes_lo,x
+                sta SID_VOICE1_FREQ_L
+                lda #$21
+                sta SID_VOICE1_CTRL
+                jmp @read_keys
+
+msg_welcome:    .byte "Welcome to the 6502 computer system!", $0a
+                .byte "Play sounds with these keys:", $0a
+                .byte " W E   T Z U   O P", $0a
+                .byte "A S D F G H J K L", $00
+
+notes_lo:       .byte <$1114  ; A - C
+                .byte 0       ; B
+                .byte 0       ; C
+                .byte <$159A  ; D - E
+                .byte <$1464  ; E - D#
+                .byte <$16E3  ; F - F
+                .byte <$1981  ; G - G
+                .byte <$1CD6  ; H - A
+                .byte 0       ; I
+                .byte <$205E  ; J - B
+                .byte <$224B  ; K - C
+                .byte <$267E  ; L - D
+                .byte 0       ; M
+                .byte 0       ; N
+                .byte <$2455  ; O - C#
+                .byte <$28C8  ; P
+                .byte 0       ; Q
+                .byte 0       ; R
+                .byte <$133F  ; S - D
+                .byte <$183F  ; T - F#
+                .byte <$1E80  ; U - A#
+                .byte 0       ; V
+                .byte <$122A  ; W - C#
+                .byte 0       ; X
+                .byte 0       ; Y
+                .byte <$1B38  ; Z - G#
+
+notes_hi:       .byte >$1114  ; A - C
+                .byte 0       ; B
+                .byte 0       ; C
+                .byte >$159A  ; D - E
+                .byte >$1464  ; E - D#
+                .byte >$16E3  ; F - F
+                .byte >$1981  ; G - G
+                .byte >$1CD6  ; H - A
+                .byte 0       ; I
+                .byte >$205E  ; J - B
+                .byte >$224B  ; K - C
+                .byte >$267E  ; L - D
+                .byte 0       ; M
+                .byte 0       ; N
+                .byte >$2455  ; O - C#
+                .byte >$28C8  ; P - D#
+                .byte 0       ; Q
+                .byte 0       ; R
+                .byte >$133F  ; S - D
+                .byte >$183F  ; T - F#
+                .byte >$1E80  ; U - A#
+                .byte 0       ; V
+                .byte >$122A  ; W - C#
+                .byte 0       ; X
+                .byte 0       ; Y
+                .byte >$1B38  ; Z - G#

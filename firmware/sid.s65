@@ -1,0 +1,108 @@
+                .include "zeropage.inc65"
+                .include "io.inc65"
+                .include "macros.inc65"
+
+                .export _sid_init
+                .export _sid_synth
+
+                .import _keys_update
+                .import _keys_getc
+
+                .code
+
+; void sid_init()
+; Initialize the SID
+_sid_init:      phax
+                lda #0
+                ldx #24
+@clear:         sta SID_BASE,x
+                dex
+                bpl @clear
+                plax
+                rts
+
+_sid_synth:     lda #$09
+                sta SID_VOICE1_AD
+                lda #$8A
+                sta SID_VOICE1_SR
+                lda #$0f
+                sta SID_MODE_VOLUME
+@read_keys:     jsr _keys_update
+                jsr _keys_getc
+                bne @key_pressed
+                lda #$20
+                sta SID_VOICE1_CTRL
+@key_pressed:   cmp #$1b
+                bne @check_note
+                lda #$00
+                sta SID_MODE_VOLUME
+                rts
+@check_note:    cmp #'a'
+                bcc @read_keys
+                cmp #('z' + 1)
+                bcs @read_keys
+                sec
+                sbc #'a'
+                tax
+                lda notes_hi,x
+                beq @read_keys
+                sta SID_VOICE1_FREQ_H
+                lda notes_lo,x
+                sta SID_VOICE1_FREQ_L
+                lda #$21
+                sta SID_VOICE1_CTRL
+                jmp @read_keys
+
+notes_lo:       .byte <$1114  ; A - C
+                .byte 0       ; B
+                .byte 0       ; C
+                .byte <$159A  ; D - E
+                .byte <$1464  ; E - D#
+                .byte <$16E3  ; F - F
+                .byte <$1981  ; G - G
+                .byte <$1CD6  ; H - A
+                .byte 0       ; I
+                .byte <$205E  ; J - B
+                .byte <$224B  ; K - C
+                .byte <$267E  ; L - D
+                .byte 0       ; M
+                .byte 0       ; N
+                .byte <$2455  ; O - C#
+                .byte <$28C8  ; P
+                .byte 0       ; Q
+                .byte 0       ; R
+                .byte <$133F  ; S - D
+                .byte <$183F  ; T - F#
+                .byte <$1E80  ; U - A#
+                .byte 0       ; V
+                .byte <$122A  ; W - C#
+                .byte 0       ; X
+                .byte 0       ; Y
+                .byte <$1B38  ; Z - G#
+
+notes_hi:       .byte >$1114  ; A - C
+                .byte 0       ; B
+                .byte 0       ; C
+                .byte >$159A  ; D - E
+                .byte >$1464  ; E - D#
+                .byte >$16E3  ; F - F
+                .byte >$1981  ; G - G
+                .byte >$1CD6  ; H - A
+                .byte 0       ; I
+                .byte >$205E  ; J - B
+                .byte >$224B  ; K - C
+                .byte >$267E  ; L - D
+                .byte 0       ; M
+                .byte 0       ; N
+                .byte >$2455  ; O - C#
+                .byte >$28C8  ; P - D#
+                .byte 0       ; Q
+                .byte 0       ; R
+                .byte >$133F  ; S - D
+                .byte >$183F  ; T - F#
+                .byte >$1E80  ; U - A#
+                .byte 0       ; V
+                .byte >$122A  ; W - C#
+                .byte 0       ; X
+                .byte 0       ; Y
+                .byte >$1B38  ; Z - G#

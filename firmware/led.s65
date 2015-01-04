@@ -1,0 +1,36 @@
+            .include "io.inc65"
+            .include "zeropage.inc65"
+            .include "macros.inc65"
+
+            .export _led_init
+            .export _led_set
+
+            .import popa
+            .import incsp1
+
+            .code
+
+; void led_init()
+; Initialize the LED VIA pin.
+; Initially the LED is turned off.
+_led_init:  lda LED_DDR
+            ora #LED
+            sta LED_DDR
+            lda LED_OUT
+            and #<~LED
+            sta LED_OUT
+            rts
+
+; void led_set(char state)
+; Set the LED on (state != 0) or off (state == 0)
+; @in A (state) turns the LED off, any other value turns it on
+_led_set:   cmp #0
+            bne @on
+@off:       lda LED_OUT
+            and #<~LED
+            sta LED_OUT
+            rts
+@on:        lda LED_OUT
+            ora #LED
+            sta LED_OUT
+            rts

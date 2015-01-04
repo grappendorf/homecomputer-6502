@@ -1,0 +1,30 @@
+                  .include "zeropage.inc65"
+
+                  .zeropage
+
+sp:               .res 2
+sreg:             .res 2
+regsave:          .res 4
+ptr1:             .res 2
+ptr2:             .res 2
+ptr3:             .res 2
+ptr4:             .res 2
+tmp1:             .res 1
+tmp2:             .res 1
+tmp3:             .res 1
+tmp4:             .res 1
+regbank:          .res 6
+tmpstack:         .res 1
+_millis:          .res 4
+_jiffies:         .res 1
+_seconds:         .res 1
+_minutes:         .res 1
+_hours:           .res 1
+key_code:         .res 1
+key_modifiers:    .res 1
+key_tmp1:         .res 1
+key_tmp2:         .res 1
+lcd_enable_bits:  .res 1
+lcd_cursor:       .res 1
+lcd_row:          .res 1
+lcd_column:       .res 1

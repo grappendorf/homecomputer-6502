@@ -1,0 +1,89 @@
+                  .include "zeropage.inc65"
+                  .include "io.inc65"
+                  .include "macros.inc65"
+
+                  .export nmi_handler
+                  .export irq_handler
+                  .export irq_init
+
+                  .code
+
+irq_init:         lda #0
+                  sta _millis
+                  sta _millis + 1
+                  sta _millis + 2
+                  sta _millis + 3
+                  sta _jiffies
+                  sta _seconds
+                  sta _minutes
+                  sta _hours
+                  lda #%01000000
+                  sta VIA1_ACR
+                  lda #%11000000
+                  sta VIA1_IER
+                  lda #<10000
+                  sta VIA1_T1C_L
+                  lda #>10000
+                  sta VIA1_T1C_H
+                  rts
+
+nmi_handler:      rti
+
+irq_handler:      pha
+                  txa
+                  pha
+                  tya
+                  pha
+                  jmp timer1_irq
+
+timer1_irq:       lda _millis
+                  clc
+                  adc #10
+                  sta _millis
+                  bcc @l1
+                  inc _millis + 1
+                  bne @l1
+                  inc _millis + 2
+                  bne @l1
+                  inc _millis + 3
+@l1:              lda _jiffies
+                  clc
+                  adc #1
+                  sta _jiffies
+                  cmp #100
+                  bne @l2
+                  lda #0
+                  sta _jiffies
+                  lda _seconds
+                  clc
+                  adc #1
+                  sta _seconds
+                  cmp #60
+                  bne @l2
+                  lda #0
+                  sta _seconds
+                  lda _minutes
+                  clc
+                  adc #1
+                  sta _minutes
+                  cmp #60
+                  bne @l2
+                  lda #0
+                  sta _minutes
+                  lda _hours
+                  clc
+                  adc #1
+                  sta _hours
+                  cmp #24
+                  bne @l2
+                  lda #0
+                  sta _hours
+@l2:              lda VIA1_T1C_L
+                  jmp irq_handler_end
+
+irq_handler_end:  pla
+                  tay
+                  pla
+                  tax
+                  pla
+                  rti

@@ -1,0 +1,79 @@
+                  .setcpu "6502"
+
+                  .include "io.inc65"
+
+                  LED_DDR = VIA1_DDRA
+                  LED_OUT = VIA1_ORA
+                  LED     = VIA_PA7
+
+                  TIMER_INTERVAL = 10000  ; One interrupt every 100 ms (@ 1 MHz)
+
+                  .segment "VECTORS"
+
+                  .word   nmi
+                  .word   reset
+                  .word   irq
+
+                  .bss
+
+ticks:            .byte 0
+max_ticks:        .byte 0
+
+                  .code
+
+reset:            jmp main
+
+nmi:              jmp nmi_handler
+
+irq:              jmp irq_handler
+
+main:             sei
+                  cld
+                  ldx #$ff
+                  txs
+
+init_led:         lda LED_DDR
+                  ora #LED
+                  sta LED_DDR
+                  lda LED_OUT
+                  and #<~LED
+                  sta LED_OUT
+
+init_timer:       lda #0
+                  sta ticks
+                  lda #100              ; Switch LED every 100 * 100 ms = 1 s
+                  sta max_ticks
+                  lda #%01000000        ; Continous running T1, disable PB7
+                  sta VIA1_ACR
+                  lda #%11000000        ; Enable T1 interrupt
+                  sta VIA1_IER
+                  lda #<TIMER_INTERVAL  ; Initialize T1 with timer interval
+                  sta VIA1_T1C_L
+                  lda #>TIMER_INTERVAL
+                  sta VIA1_T1C_H
+
+                  cli
+
+loop:             jmp loop
+
+nmi_handler:      pha
+                  lda #10               ; Switch LED every 10 * 100 ms = 0.1 s
+                  sta max_ticks
+                  pla
+                  rti
+
+irq_handler:      pha
+                  lda ticks
+                  clc
+                  adc #1
+                  sta ticks
+                  cmp max_ticks
+                  bne @irq_done
+                  lda #0
+                  sta ticks
+                  lda LED_OUT
+                  eor #LED
+                  sta LED_OUT
+@irq_done:        lda VIA1_T1C_L
+                  pla
+                  rti

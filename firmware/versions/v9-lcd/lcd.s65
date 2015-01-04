@@ -1,0 +1,161 @@
+                .setcpu "6502"
+                .include "macros.inc65"
+                .include "zeropage.inc65"
+                .include "io.inc65"
+                .include "tools.inc65"
+
+                LCD_D4  = VIA_PA0
+                LCD_D5  = VIA_PA1
+                LCD_D6  = VIA_PA2
+                LCD_D7  = VIA_PA3
+                LCD_RS  = VIA_PA4
+                LCD_EN1 = VIA_PA5
+                LCD_EN2 = VIA_PA6
+
+                .export lcd_init
+                .export lcd_puts
+                .export lcd_putc
+
+                .zeropage
+
+enable_bits:    .byte 0
+
+                .code
+
+; Initialize the LCD
+; @mod TMP0
+lcd_init:       phaxy
+
+                lda #$ff
+                sta VIA1_ORA
+                sta VIA1_DDRA
+                ldx #50
+                jsr delay_ms
+
+                lda VIA1_ORA
+                and #<~(LCD_EN1 | LCD_EN2 | LCD_RS)
+                sta VIA1_ORA
+
+enable_4bit:    lda #<(LCD_EN1 | LCD_EN2)
+                sta enable_bits
+                lda #$03
+                jsr write_4bits
+                ldx #5
+                jsr delay_ms
+                lda #$03
+                jsr write_4bits
+                ldx #1
+                jsr delay_ms
+                lda #$03
+                jsr write_4bits
+                ldx #1
+                jsr delay_ms
+                lda #$02
+                jsr write_4bits
+                ldx #1
+                jsr delay_ms
+
+configure:      lda #$28    ; 4-bit interface, 2 lines, 5x7 font
+                jsr command
+                lda #$08    ; Turn display off
+                jsr command
+                lda #$0f    ; Turn display on, cursor on blink
+                jsr command
+                lda #$06    ; Move cursor, no shift
+                jsr command
+                lda #$01    ; Clear display
+                jsr command
+                lda #$02    ; Cursor home
+                jsr command
+
+                lda #<(LCD_EN1)
+                sta enable_bits
+
+                plaxy
+                rts
+
+; Send the command in A to the LCD
+; @mod A, X, Y, TMP0
+command:        tax
+                lda VIA1_ORA
+                and #<~LCD_RS
+                sta VIA1_ORA
+                txa
+                jmp send
+
+; Send the data in A to the LCD
+; @mod A, X, Y, TMP0
+write:          tax
+                lda VIA1_ORA
+                ora #<LCD_RS
+                sta VIA1_ORA
+                txa
+                jmp send
+
+; Send the accu to the LCD
+; @mod A, X, Y, TMP0
+send:           tay
+                lsr
+                lsr
+                lsr
+                lsr
+                jsr write_4bits
+                tya
+                and #$0f
+                jsr write_4bits
+                rts
+
+; Send A[0..3] to the LCD, assumes A[4..7] = 0
+; @mod A, X, TMP0
+write_4bits:    sta TMP0
+                lda VIA1_ORA
+                and #$f0
+                ora TMP0
+                sta VIA1_ORA
+                jsr pulse_enable
+                rts
+
+; Send an enable pulse to the LCD
+; @mod A, X
+pulse_enable:   lda enable_bits
+                eor #$ff
+                and VIA1_ORA
+                sta VIA1_ORA
+                ldx #50
+delay1:         dex
+                bne delay1
+                lda enable_bits
+                ora VIA1_ORA
+                sta VIA1_ORA
+                ldx #200
+delay2:         dex
+                bne delay2
+                lda enable_bits
+                eor #$ff
+                and VIA1_ORA
+                sta VIA1_ORA
+                ldx #50
+delay3:         dex
+                bne delay3
+                rts
+
+; Print the character in A onto the LCD
+lcd_putc:       sta TMP0
+                phaxy
+                lda TMP0
+                jsr write
+                plaxy
+                rts
+
+; Print the zero terminated string pointed onto the LCD
+lcd_puts:       phaxy
+                ldy #0
+next_char:      sty TMP1
+                lda (R0),y
+                beq eos
+                jsr write
+                ldy TMP1
+                iny
+                bne next_char
+eos:            plaxy
+                rts

@@ -1,0 +1,18 @@
+                .setcpu "6502"
+                .include "zeropage.inc65"
+                .include "io.inc65"
+                .include "macros.inc65"
+
+                .export sid_init
+
+                .code
+
+; Initialize the SID
+sid_init:       phax
+                lda #0
+                ldx #24
+@clear:         sta SID_BASE,x
+                dex
+                bpl @clear
+                plax
+                rts

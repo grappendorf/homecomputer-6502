@@ -1,0 +1,258 @@
+                      .include "macros.inc65"
+                      .include "zeropage.inc65"
+                      .include "io.inc65"
+
+                      .export _keys_init
+                      .export _keys_update
+                      .export _keys_getc
+                      .export _keys_get_code
+                      .export _keys_get_modifiers
+                      .export _keys_read_row
+
+                      .import _delay_ms
+
+                      MOD_SHIFT = 1
+                      MOD_CTRL = 2
+                      MOD_ALT = 4
+
+                      .code
+
+; void keys_init()
+; Initialize the keyboard
+_keys_init:           pha
+                      ; Use PA[0..7] of VIA2 for column input
+                      lda #$00
+                      sta VIA2_DDRA
+                      ; Use PB[0..7] of VIA2 for row output
+                      lda #$ff
+                      sta VIA2_DDRB
+                      ; Use PB[0..5] of VIA1 for row output
+                      lda VIA1_DDRB
+                      ora #$3f
+                      sta VIA1_DDRB
+                      ; Set all rows high
+                      lda #$ff
+                      sta VIA2_ORB
+                      lda VIA1_ORB
+                      ora #$3f
+                      sta VIA1_ORB
+                      pla
+                      rts
+
+; void keys_update()
+; Update the keyboard status
+; Call this function periodically from a main program loop or a timer tick interrupt
+; The current scan code is stored in key_code ($FF if no key is pressed)
+; The current modifiers are stored in key_modifiers ($00 if no modifier is pressed)
+_keys_update:         phaxy
+                      jsr scan
+                      cmp #$ff
+                      bne @debounce
+                      sta key_code
+                      plaxy
+                      rts
+@debounce:            sta key_code
+                      lda #20
+                      jsr _delay_ms
+                      jsr scan
+                      cmp key_code
+                      beq @key_pressed
+                      lda #$ff
+                      sta key_code
+                      plaxy
+                      rts
+@key_pressed:         plaxy
+                      rts
+
+; char keys_getc()
+; Get the character of the currently pressed key or 0 if none is pressed
+; @out A the ascii code of the pressed key (with modifiers) or 0
+_keys_getc:           lda key_code
+                      cmp #$ff
+                      bne @key_pressed
+                      lda #0
+                      rts
+@key_pressed:         phx
+                      tax
+                      lda key_modifiers
+                      and #MOD_SHIFT
+                      bne @shift_pressed
+                      lda code_to_ascii_lower,x
+                      plx
+                      rts
+@shift_pressed:       lda code_to_ascii_upper,x
+                      plx
+                      rts
+
+; Scan the keyboard for a pressed key
+; @out A The scan code or $ff if no key is currently pressed
+; @mod X, Y, tmp1
+scan:                 lda #0
+                      sta key_modifiers
+                      lda #$ff
+                      sta key_tmp1
+                      ldx #13
+@read:                jsr read_row
+                      bne @check_alt
+@next_row:            dex
+                      bpl @read
+                      lda key_tmp1
+                      rts
+@check_alt:           cpx #6
+                      bne @check_shift
+                      tay
+                      and #%00110000
+                      beq @no_alt_keys
+                      lda key_modifiers
+                      ora #MOD_ALT
+                      sta key_modifiers
+@no_alt_keys:         tya
+                      and #%11001111
+                      bne @find_key
+                      beq @next_row
+@check_shift:         cpx #11
+                      bne @check_ctrl
+                      tay
+                      and #%11000000
+                      beq @no_shift_keys
+                      lda key_modifiers
+                      ora #MOD_SHIFT
+                      sta key_modifiers
+@no_shift_keys:       tya
+                      and #%00111111
+                      bne @find_key
+                      beq @next_row
+@check_ctrl:          cpx #13
+                      bne @find_key
+                      tay
+                      and #%01000100
+                      beq @no_ctrl_keys
+                      lda key_modifiers
+                      ora #MOD_CTRL
+                      sta key_modifiers
+@no_ctrl_keys:        tya
+                      and #%10111011
+                      bne @find_key
+                      beq @next_row
+@find_key:            stx key_tmp2
+                      ldy #7
+@next_column:         asl
+                      bcs @column_found
+                      dey
+                      bpl @next_column
+@column_found:        tya
+@add_row_offset:      dex
+                      bmi @got_scan_code
+                      clc
+                      adc #8
+                      bne @add_row_offset
+@got_scan_code:       sta key_tmp1
+                      ldx key_tmp2
+                      jmp @next_row
+
+; Read the row that is specified by X
+; @in  X The row to read
+; @out A The column value
+; @mod Y, tmp1
+read_row:             ; Set row X low
+                      lda row_out_reg_lo,x
+                      sta tmp1
+                      lda row_out_reg_hi,x
+                      sta tmp1 + 1
+                      lda row_bit_mask,x
+                      ldy #0
+                      and (tmp1),y
+                      sta (tmp1),y
+                      ; Read column values
+                      lda VIA2_IRA
+                      eor #$ff
+                      tay
+                      ; Set all rows high
+                      lda #$ff
+                      sta VIA2_ORB
+                      lda VIA1_ORB
+                      ora #$3f
+                      sta VIA1_ORB
+                      tya
+                      rts
+
+; Get the code of the currently pressed key
+; @out A The key code or $ff if no key is pressed
+_keys_get_code:       lda key_code
+                      ldx #0
+                      rts
+
+; Get the modifiers of the currently pressed key
+; @out A The modifiers or 0 if none are pressed
+_keys_get_modifiers:  lda key_modifiers
+                      ldx #0
+                      rts
+
+; unsigned char scan_row(unsigned char row)
+; Scan a row and return the column value
+; @in A The row to scan
+; @out A The column value
+_keys_read_row:       phxy
+                      tax
+                      jsr read_row
+                      plxy
+                      rts
+
+; Table of output register addresses for each row
+row_out_reg_lo:       .byte <VIA2_ORB, <VIA2_ORB, <VIA2_ORB, <VIA2_ORB, <VIA2_ORB, <VIA2_ORB, <VIA2_ORB, <VIA2_ORB
+                      .byte <VIA1_ORB, <VIA1_ORB, <VIA1_ORB, <VIA1_ORB, <VIA1_ORB, <VIA1_ORB
+row_out_reg_hi:       .byte >VIA2_ORB, >VIA2_ORB, >VIA2_ORB, >VIA2_ORB, >VIA2_ORB, >VIA2_ORB, >VIA2_ORB, >VIA2_ORB
+                      .byte >VIA1_ORB, >VIA1_ORB, >VIA1_ORB, >VIA1_ORB, >VIA1_ORB, >VIA1_ORB
+; Table of output register bit masks for each row (with a 0 bit for the selected row)
+row_bit_mask:         .byte <~VIA_PB0, <~VIA_PB1, <~VIA_PB2, <~VIA_PB3, <~VIA_PB4, <~VIA_PB5, <~VIA_PB6, <~VIA_PB7
+                      .byte <~VIA_PB0, <~VIA_PB1, <~VIA_PB2, <~VIA_PB3, <~VIA_PB4, <~VIA_PB5
+
+code_to_ascii_lower:  .byte '1', 'a', '^', 'q', 0, $1b, 'y', 0
+                      .byte '3', 'd', 0, 'e', 0, 0, 'c', 0
+                      .byte '4', 'f', '5', 'r', 'b', 'g', 'v', 't'
+                      .byte '7', 'j', '6', 'u', 'n', 'h', 'm', 'z'
+                      .byte '8', 'k', $60, 'i', 0, 0, ',', '+'
+                      .byte '0', $ef, $e2, 'p', '-', $e1, '#', $f5
+                      .byte 0, 0, 0, 0, 0, 0, 0, 0
+                      .byte 0, 0, 0, 0, 0, 0, 0, 0
+                      .byte 0, 's', 0, 'w', 0, '<', 'x', 0
+                      .byte 0, 0, 0, 0, ' ', 0, $0a, 0
+                      .byte 0, 'l', 0, 'o', 0, 0, '.', 0
+                      .byte 0, 0, 0, 0, 0, 0, 0, 0
+                      .byte 0, '2', 0, '9', 0, 0, 0, 0
+                      .byte 0, 0, 0, 0, 0, 0, 0, 0
+
+code_to_ascii_upper:  .byte '!', 'A', $df, 'Q', 0, $1b, 'Y', 0
+                      .byte $f2, 'D', 0, 'E', 0, 0, 'C', 0
+                      .byte '$', 'F', '%', 'R', 'B', 'G', 'V', 'T'
+                      .byte '/', 'J', '&', 'U', 'N', 'H', 'M', 'Z'
+                      .byte '(', 'K', $60, 'i', 0, 0, ';', '*'
+                      .byte '0', $ef, $e2, 'P', '_', $e1, $27, $f5
+                      .byte 0, 0, 0, 0, 0, 0, 0, 0
+                      .byte 0, 0, 0, 0, 0, 0, 0, 0
+                      .byte 0, 'S', 0, 'W', 0, '>', 'X', 0
+                      .byte 0, 0, 0, 0, ' ', 0, $0a, 0
+                      .byte 0, 'L', 0, 'O', 0, 0, ':', 0
+                      .byte 0, 0, 0, 0, 0, 0, 0, 0
+                      .byte 0, $22, 0, ')', 0, 0, 0, 0
+                      .byte 0, 0, 0, 0, 0, 0, 0, 0
+
+; Keyboard matrix
+;
+; Row \ Column (VIA2A)
+;               7       6       5       4       3       2       1       0
+;
+;  0 VIA2PB0    TAB     Y       ESC             Q       ^       A       1
+;  1 VIA2PB1    F3      C       F4              E       F2      D       3
+;  2 VIA2PB2    T       V       G       B       R       5       F       4
+;  3 VIA2PB3    Z       M       H       N       U       6       J       7
+;  4 VIA2PB4    +       ,       F6              I       ´       K       8
+;  5 VIA2PB5    Ü       #       Ä       -       P       ß       Ö       0
+;  6 VIA2PB6                    ALT     ALT_GR  SCROLL                  PRINT
+;  7 VIA2PB7    MENU    BREAK   CRS_U   CRS_L           HOME            END
+;  8 VIA1PB0    CAPSLCK X       <       CRS_R   W       INSERT  S       F12
+;  9 VIA1PB1    BACKSP  RETURN  F5      SPACE           F9              F10
+; 10 VIA1PB2    F7      .                       O       PAGE_UP L       PAGE_DN
+; 11 VIA1PB3    SHIFT_L SHIFT_R
+; 12 VIA1PB4    F1      NUM     F8      CRS_D   9       DELETE  2       F11
+; 13 VIA1PB5            CTRL_R                          CTRL_L

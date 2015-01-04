@@ -1,0 +1,163 @@
+                      .setcpu "6502"
+                      .include "zeropage.inc65"
+                      .include "acia.inc65"
+                      .include "string.inc65"
+                      .include "macros.inc65"
+
+                      .segment "VECTORS"
+
+                      .word   nmi
+                      .word   reset
+                      .word   irq
+
+                      .bss
+
+                      BUFFER_LENGTH = 80
+buffer:               .res BUFFER_LENGTH + 1, 0
+
+                      .code
+
+reset:                jmp main
+
+nmi:                  rti
+
+irq:                  rti
+
+main:                 cld
+                      ldx #$ff
+                      txs
+
+                      jsr acia_init
+
+                      ld16 R0, msg_welcome
+                      jsr acia_puts
+
+loop:                 ld16 R0, prompt
+                      jsr acia_puts
+                      ld16 R0, buffer
+                      lda #BUFFER_LENGTH
+                      jsr acia_gets
+                      lda buffer
+                      cmp #'m'
+                      bne @not_cmd_m
+                      jsr cmd_memory
+                      jmp loop
+@not_cmd_m:           cmp #'w'
+                      bne @not_cmd_w
+                      jsr cmd_write
+                      jmp loop
+@not_cmd_w:           cmp #'j'
+                      bne @not_cmd_j
+                      jsr cmd_jump
+                      jmp loop
+@not_cmd_j:           ld16 R0, msg_unknown_command
+                      jsr acia_puts
+                      jmp loop
+
+prompt:               .byte "> ", $00
+assign_arrow:         .byte " <- ", $00
+msg_welcome:          .byte $0a, $0a, "Welcome to the 6502 monitor program!", $0a, $00
+msg_unknown_command:  .byte "Unknown command", $0a, $00
+
+; Display a range of memory as hex numbers and characters
+; m <start-address>
+cmd_memory:           ld16 R0, buffer + 2
+                      jsr scan_hex16
+
+@print_address:       ld16 R0, buffer
+                      lda RES + 1
+                      jsr fmt_hex_string
+                      ld16 R0, buffer + 2
+                      lda RES
+                      jsr fmt_hex_string
+                      ld16 R0, buffer
+                      jsr acia_puts
+                      lda #' '
+                      jsr acia_putc
+                      jsr acia_putc
+
+print_bytes:          ldy #0
+                      ld16 R0, buffer
+@next_byte:           lda (RES),y
+                      jsr fmt_hex_string
+                      jsr acia_puts
+                      lda #' '
+                      jsr acia_putc
+                      cpy #7
+                      bne @skip_mid_sep
+                      jsr acia_putc
+@skip_mid_sep:        iny
+                      cpy #16
+                      bne @next_byte
+
+@print_chars:         lda #' '
+                      jsr acia_putc
+                      jsr acia_putc
+                      lda #'|'
+                      jsr acia_putc
+                      ldy #0
+@next_char:           lda (RES),y
+                      cmp #$20
+                      bcc @non_printable
+                      cmp #$7e
+                      bcs @non_printable
+                      jmp @printable
+@non_printable:       lda #'.'
+@printable:           jsr acia_putc
+                      iny
+                      cpy #16
+                      bne @next_char
+                      lda #'|'
+                      jsr acia_putc
+                      jsr acia_put_newline
+                      rts
+
+; Write a byte to memory
+; w <address> <byte>
+cmd_write:            ld16 R0, buffer + 2
+                      jsr scan_hex16
+
+@print_address:       ld16 R0, buffer
+                      lda RES + 1
+                      jsr fmt_hex_string
+                      ld16 R0, buffer + 2
+                      lda RES
+                      jsr fmt_hex_string
+                      ld16 R0, buffer
+                      jsr acia_puts
+
+                      lda #':'
+                      jsr acia_putc
+
+@read_and_print_byte: ld16 R0, buffer + 7
+                      jsr scan_hex
+                      tay
+                      ld16 R0, buffer
+                      tya
+                      jsr fmt_hex_string
+                      jsr acia_puts
+                      jsr acia_put_newline
+                      tya
+
+@store_value:         ldy #0
+                      sta (RES),y
+                      rts
+
+; Jump to address
+; j <address>
+cmd_jump:             ld16 R0, buffer + 2
+                      jsr scan_hex16
+
+@print_address:       lda #'*'
+                      jsr acia_putc
+                      ld16 R0, buffer
+                      lda RES + 1
+                      jsr fmt_hex_string
+                      ld16 R0, buffer + 2
+                      lda RES
+                      jsr fmt_hex_string
+                      ld16 R0, buffer
+                      jsr acia_puts
+                      jsr acia_put_newline
+
+@jump:                jmp (RES)

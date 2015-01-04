@@ -1,0 +1,5 @@
+.importzp RES
+.importzp R0
+.importzp R1
+.importzp TMP0
+.importzp TMP1

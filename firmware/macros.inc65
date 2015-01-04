@@ -1,0 +1,111 @@
+; Push X
+.macro phx
+  sta tmpstack
+  txa
+  pha
+  lda tmpstack
+.endmacro
+
+; Push Y
+.macro phy
+  sta tmpstack
+  tya
+  pha
+  lda tmpstack
+.endmacro
+
+; Push X and Y
+.macro phxy
+  sta tmpstack
+  txa
+  pha
+  tya
+  pha
+  lda tmpstack
+.endmacro
+
+; Push A and X
+.macro phax
+  sta tmpstack
+  pha
+  txa
+  pha
+  lda tmpstack
+.endmacro
+
+; Push A and Y
+.macro phay
+  sta tmpstack
+  pha
+  tya
+  pha
+  lda tmpstack
+.endmacro
+
+; Push A, X and Y
+.macro phaxy
+  sta tmpstack
+  pha
+  txa
+  pha
+  tya
+  pha
+  lda tmpstack
+.endmacro
+
+; Pull X
+.macro plx
+  sta tmpstack
+  pla
+  tax
+  lda tmpstack
+.endmacro
+
+; Pull Y
+.macro ply
+  sta tmpstack
+  pla
+  tay
+  lda tmpstack
+.endmacro
+
+; Pull X and Y
+.macro plxy
+  sta tmpstack
+  pla
+  tay
+  pla
+  tax
+  lda tmpstack
+.endmacro
+
+; Pull A and X
+.macro plax
+  pla
+  tax
+  pla
+.endmacro
+
+; Pull A and Y
+.macro play
+  pla
+  tay
+  pla
+.endmacro
+
+; Pull A, X and Y
+.macro plaxy
+  pla
+  tay
+  pla
+  tax
+  pla
+.endmacro
+
+; Load zero page register reg/reg+1 with the 16-bit value, destroys A
+.macro ld16 reg, value
+  lda #<(value)
+  sta reg
+  lda #>(value)
+  sta reg + 1
+.endmacro

@@ -1,0 +1,212 @@
+                      .setcpu "6502"
+
+                      .include "macros.inc65"
+                      .include "zeropage.inc65"
+                      .include "string.inc65"
+                      .include "tools.inc65"
+                      .include "io.inc65"
+                      .include "acia.inc65"
+                      .include "lcd.inc65"
+                      .include "keys.inc65"
+
+                      LED_DDR = VIA1_DDRA
+                      LED_OUT = VIA1_ORA
+                      LED     = VIA_PA7
+
+                      .segment "VECTORS"
+
+                      .word   nmi
+                      .word   reset
+                      .word   irq
+
+                      .bss
+
+                      BUFFER_LENGTH = 80
+buffer:               .res BUFFER_LENGTH + 1, 0
+
+                      .code
+
+reset:                jmp main
+
+nmi:                  rti
+
+irq:                  rti
+
+main:                 cld
+                      ldx #$ff
+                      txs
+
+                      jsr keys_init
+                      jsr lcd_init
+                      jsr acia_init
+
+init_led:             lda LED_DDR
+                      ora #LED
+                      sta LED_DDR
+                      lda LED_OUT
+                      and #<~LED
+                      sta LED_OUT
+
+                      ld16 R0, msg_monitor_welcome
+                      jsr acia_puts
+
+                      ld16 R0, msg_welcome
+                      jsr lcd_puts
+                      jsr lcd_cursor_blink
+
+loop:                 lda #'>'
+                      jsr lcd_putc
+                      ldx #0
+wait_for_key_release: jsr keys_update
+                      jsr keys_getchar
+                      bne wait_for_key_release
+wait_for_key_press:   jsr keys_update
+                      jsr keys_getchar
+                      beq wait_for_key_press
+                      cmp #$0a
+                      beq newline
+                      jsr lcd_putc
+                      sta buffer,x
+                      inx
+                      jmp wait_for_key_release
+newline:              jsr lcd_putc
+                      lda buffer
+check_m:              cmp #'m'
+                      bne check_w
+                      jsr cmd_memory
+                      jmp loop
+check_w:              cmp #'w'
+                      bne check_j
+                      jsr cmd_write
+                      jmp loop
+check_j:              cmp #'j'
+                      bne check_b
+                      jsr cmd_jump
+                      jmp loop
+check_b:              cmp #'b'
+                      bne unknown
+                      jsr cmd_blink
+                      jmp loop
+unknown:              ld16 R0, msg_unknown_command
+                      jsr lcd_puts
+                      jmp loop
+
+prompt:               .byte "> ", $00
+assign_arrow:         .byte " <- ", $00
+msg_monitor_welcome:  .byte $0a, $0a, "Welcome to the 6502 monitor program!", $0a, $00
+msg_unknown_command:  .byte "Unknown command", $0a, $00
+msg_welcome:          .byte "Welcome to the 6502 computer system!", $00
+
+; Display a range of memory as hex numbers and characters
+; m <start-address>
+cmd_memory:           ld16 R0, buffer + 2
+                      jsr scan_hex16
+
+@print_address:       ld16 R0, buffer
+                      lda RES + 1
+                      jsr fmt_hex_string
+                      ld16 R0, buffer + 2
+                      lda RES
+                      jsr fmt_hex_string
+                      ld16 R0, buffer
+                      jsr lcd_puts
+
+print_bytes:          ldy #0
+                      ld16 R0, buffer
+@next_byte:           lda #' '
+                      jsr lcd_putc
+                      lda (RES),y
+                      jsr fmt_hex_string
+                      jsr lcd_puts
+                      iny
+                      cpy #8
+                      bne @next_byte
+
+@print_chars:         lda #' '
+                      jsr lcd_putc
+                      jsr lcd_putc
+                      lda #'|'
+                      jsr lcd_putc
+                      ldy #0
+@next_char:           lda (RES),y
+                      cmp #$20
+                      bcc @non_printable
+                      cmp #$7e
+                      bcs @non_printable
+                      jmp @printable
+@non_printable:       lda #'.'
+@printable:           jsr lcd_putc
+                      iny
+                      cpy #8
+                      bne @next_char
+                      lda #'|'
+                      jsr lcd_putc
+                      lda #$0a
+                      jsr lcd_putc
+                      rts
+
+; Write a byte to memory
+; w <address> <byte>
+cmd_write:            ld16 R0, buffer + 2
+                      jsr scan_hex16
+
+@print_address:       ld16 R0, buffer
+                      lda RES + 1
+                      jsr fmt_hex_string
+                      ld16 R0, buffer + 2
+                      lda RES
+                      jsr fmt_hex_string
+                      ld16 R0, buffer
+                      jsr lcd_puts
+
+                      lda #':'
+                      jsr lcd_putc
+
+@read_and_print_byte: ld16 R0, buffer + 7
+                      jsr scan_hex
+                      tay
+                      ld16 R0, buffer
+                      tya
+                      jsr fmt_hex_string
+                      jsr lcd_puts
+                      lda #$0a
+                      jsr lcd_putc
+                      tya
+
+@store_value:         ldy #0
+                      sta (RES),y
+                      rts
+
+; Jump to address
+; j <address>
+cmd_jump:             ld16 R0, buffer + 2
+                      jsr scan_hex16
+
+@print_address:       lda #'*'
+                      jsr lcd_putc
+                      ld16 R0, buffer
+                      lda RES + 1
+                      jsr fmt_hex_string
+                      ld16 R0, buffer + 2
+                      lda RES
+                      jsr fmt_hex_string
+                      ld16 R0, buffer
+                      jsr lcd_puts
+                      lda #$0a
+                      jsr lcd_putc
+
+@jump:                jmp (RES)
+
+; Blink the LED
+; b
+cmd_blink:            lda LED_OUT
+                      and #<~LED
+                      sta LED_OUT
+                      ldx #250
+                      jsr delay_ms
+                      lda LED_OUT
+                      ora #LED
+                      sta LED_OUT
+                      ldx #250
+                      jsr delay_ms
+                      jmp cmd_blink

@@ -1,0 +1,6 @@
+*.sublime-workspace
+*.lst
+*.o
+*.s
+*.map
+firmware/**/firmware

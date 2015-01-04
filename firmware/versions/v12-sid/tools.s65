@@ -1,0 +1,38 @@
+            .setcpu "6502"
+
+            .export delay_ms
+
+            .code
+
+            .align 256
+
+; Delay the number of miliseconds specified by X
+; This is hardcoded for a 1 MHz system clock
+; @in X The delay in ms
+delay_ms:   pha         ; 3
+            txa         ; 2
+            pha         ; 3
+            tya         ; 2
+            pha         ; 3
+
+            ldy $00     ; 3 (dummy operation)
+            ldy #190    ; 2
+@loop1:     dey         ; 190 * 2
+            bne @loop1  ; 190 * 3 - 1
+
+@loop2:     dex         ; 2
+            beq @return ; (x - 1) * 2 + 3
+
+            nop         ; 2
+            ldy #198    ; 2
+@loop3:     dey         ; 198 * 2
+            bne @loop3  ; 198 * 3 - 1
+
+            jmp @loop2  ; 3
+
+@return:    pla         ; 4
+            tay         ; 2
+            pla         ; 4
+            tax         ; 2
+            pla         ; 4
+            rts         ; 6 (+ 6 for JSR)

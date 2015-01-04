@@ -1,0 +1,150 @@
+                  .setcpu "6502"
+                  .include "macros.inc65"
+                  .include "zeropage.inc65"
+                  .include "io.inc65"
+                  .include "tools.inc65"
+
+                  .export keys_init
+                  .export keys_update
+                  .export keys_getchar
+
+                  .exportzp KEYS_CODE
+                  .exportzp KEYS_MODIFIERS
+
+                  .zeropage
+
+KEYS_CODE:        .byte 0
+KEYS_MODIFIERS:   .byte 0
+
+                  .code
+
+; Initialize the keyboard
+keys_init:        pha
+                  ; Use PA[0..7] of VIA2 for column input
+                  lda #$00
+                  sta VIA2_DDRA
+                  ; Use PB[0..7] of VIA2 for row output
+                  lda #$ff
+                  sta VIA2_DDRB
+                  ; Use PB[0..5] of VIA1 for row output
+                  lda VIA1_DDRB
+                  ora #$3f
+                  sta VIA1_DDRB
+                  ; Set all rows high
+                  lda #$ff
+                  sta VIA2_ORB
+                  lda VIA1_ORB
+                  ora #$3f
+                  sta VIA1_ORB
+                  pla
+                  rts
+
+; Update the keyboard status
+; Call this function periodically from a main program loop or a timer tick interrupt
+; The current scan code is stored in KEYS_CODE ($FF if no key is pressed)
+; The current modifiers are stored in KEYS_MODIFIERS ($00 if no modifier is pressed)
+keys_update:      phaxy
+                  jsr scan
+                  cmp #$ff
+                  bne @debounce
+                  sta KEYS_CODE
+                  plaxy
+                  rts
+@debounce:        sta KEYS_CODE
+                  ldx #20
+                  jsr delay_ms
+                  jsr scan
+                  cmp KEYS_CODE
+                  beq @key_pressed
+                  lda #$ff
+                  sta KEYS_CODE
+                  plaxy
+                  rts
+@key_pressed:     plaxy
+                  rts
+
+; Get the character of the currently pressed key or 0 if none is pressed
+; @out A the ascii code of the pressed key (with modifiers) or 0
+keys_getchar:     lda KEYS_CODE
+                  cmp #$ff
+                  bne @key_pressed
+                  lda #0
+                  rts
+@key_pressed:     phx
+                  tax
+                  lda code_to_ascii,x
+                  plx
+                  rts
+
+; Scan the keyboard for a pressed key
+; @out A The scan code or $ff if no key is currently pressed
+; @mod X, Y, TMP0
+scan:             ldx #13
+@next_row:        jsr read_row
+                  bne @row_pressed
+                  dex
+                  bpl @next_row
+                  lda #$ff
+                  rts
+@row_pressed:     ldy #7
+@next_column:     asl
+                  bcs @column_found
+                  dey
+                  bpl @next_column
+@column_found:    tya
+@add_row_offset:  dex
+                  bmi @got_scan_code
+                  clc
+                  adc #8
+                  bne @add_row_offset
+@got_scan_code:   rts
+
+; Read the row that is specified by X
+; @in  X The row to read
+; @out A The column value
+; @mod Y, TMP0
+read_row:         ; Set row X low
+                  lda row_out_reg_lo,x
+                  sta TMP0
+                  lda row_out_reg_hi,x
+                  sta TMP0 + 1
+                  lda row_bit_mask,x
+                  ldy #0
+                  and (TMP0),y
+                  sta (TMP0),y
+                  ; Read column values
+                  lda VIA2_IRA
+                  eor #$ff
+                  tay
+                  ; Set all rows high
+                  lda #$ff
+                  sta VIA2_ORB
+                  lda VIA1_ORB
+                  ora #$3f
+                  sta VIA1_ORB
+                  tya
+                  rts
+
+; Table of output register addresses for each row
+row_out_reg_lo:   .byte <VIA2_ORB, <VIA2_ORB, <VIA2_ORB, <VIA2_ORB, <VIA2_ORB, <VIA2_ORB, <VIA2_ORB, <VIA2_ORB
+                  .byte <VIA1_ORB, <VIA1_ORB, <VIA1_ORB, <VIA1_ORB, <VIA1_ORB, <VIA1_ORB
+row_out_reg_hi:   .byte >VIA2_ORB, >VIA2_ORB, >VIA2_ORB, >VIA2_ORB, >VIA2_ORB, >VIA2_ORB, >VIA2_ORB, >VIA2_ORB
+                  .byte >VIA1_ORB, >VIA1_ORB, >VIA1_ORB, >VIA1_ORB, >VIA1_ORB, >VIA1_ORB
+; Table of output register bit masks for each row (with a 0 bit for the selected row)
+row_bit_mask:     .byte <~VIA_PB0, <~VIA_PB1, <~VIA_PB2, <~VIA_PB3, <~VIA_PB4, <~VIA_PB5, <~VIA_PB6, <~VIA_PB7
+                  .byte <~VIA_PB0, <~VIA_PB1, <~VIA_PB2, <~VIA_PB3, <~VIA_PB4, <~VIA_PB5
+
+code_to_ascii:    .byte '1', 'a', '^', 'q', 0, 0, 'y', 0
+                  .byte '3', 'd', 0, 'e', 0, 0, 'c', 0
+                  .byte '4', 'f', '5', 'r', 'b', 'g', 'v', 't'
+                  .byte '7', 'j', '6', 'u', 'n', 'h', 'm', 'z'
+                  .byte '8', 'k', 0, 'i', 0, 0, ',', '+'
+                  .byte '0', '.', 0, 'p', '-', '.', '#', 0
+                  .byte 0, 0, 0, 0, 0, 0, 0, 0
+                  .byte 0, 0, 0, 0, 0, 0, 0, 0
+                  .byte 0, 's', 0, 'w', '<', 0, 'x', 0
+                  .byte 0, 0, 0, 0, ' ', 0, $0a, 0
+                  .byte 0, 'l', 0, 'o', 0, 0, '.', 0
+                  .byte 0, 0, 0, 0, 0, 0, 0, 0
+                  .byte 0, '2', 0, '9', 0, 0, 0, 0
+                  .byte 0, 0, 0, 0, 0, 0, 0, 0

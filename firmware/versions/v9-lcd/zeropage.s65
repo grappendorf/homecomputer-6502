@@ -1,0 +1,15 @@
+            .setcpu "6502"
+
+            .exportzp RES
+            .exportzp R0
+            .exportzp R1
+            .exportzp TMP0
+            .exportzp TMP1
+
+            .zeropage
+
+RES:        .word 0
+R0:         .word 0
+R1:         .word 0
+TMP0:       .word 0
+TMP1:       .word 0

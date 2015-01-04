@@ -1,0 +1,301 @@
+                      .setcpu "6502"
+                      .include "macros.inc65"
+                      .include "zeropage.inc65"
+                      .include "io.inc65"
+                      .include "tools.inc65"
+
+                      .export lcd_init
+                      .export lcd_command
+                      .export lcd_puts
+                      .export lcd_putc
+                      .export lcd_goto
+                      .export lcd_clear
+                      .export lcd_cursor_on
+                      .export lcd_cursor_blink
+                      .export lcd_cursor_off
+
+                      CMD_CLEARDISPLAY   = $01
+                      CMD_RETURNHOME     = $02
+                      CMD_ENTRYMODESET   = $04
+                      CMD_DISPLAYCONTROL = $08
+                      CMD_CURSORSHIFT    = $10
+                      CMD_FUNCTIONSET    = $20
+                      CMD_SETCGRAMADDR   = $40
+                      CMD_SETDDRAMADDR   = $80
+
+                      CTRL_CURSOR_DEC    = $00
+                      CTRL_CURSOR_INC    = $02
+                      CTRL_DISPLAY_FIXED = $00
+                      CTRL_DISPLAY_MOVE  = $01
+                      CTRL_DISPLAY_OFF   = $00
+                      CTRL_DISPLAY_ON    = $04
+                      CTRL_CURSOR_OFF    = $00
+                      CTRL_CURSOR_ON     = $02
+                      CTRL_CURSOR_BLINK  = $01
+                      CTRL_SHIFT_CURSOR  = $00
+                      CTRL_SHIFT_DISPLAY = $08
+                      CTRL_SHIFT_LEFT    = $00
+                      CTRL_SHIFT_RIGHT   = $04
+                      CTRL_4BIT          = $00
+                      CTRL_8BIT          = $10
+                      CTRL_LINES_1       = $00
+                      CTRL_LINES_2       = $08
+                      CTRL_FONT_5X7      = $00
+                      CTRL_FONT_5X10     = $04
+
+                      LCD_D4  = VIA_PA0
+                      LCD_D5  = VIA_PA1
+                      LCD_D6  = VIA_PA2
+                      LCD_D7  = VIA_PA3
+                      LCD_RS  = VIA_PA4
+                      LCD_EN1 = VIA_PA5
+                      LCD_EN2 = VIA_PA6
+
+                      .zeropage
+
+ENABLE_BITS:          .byte 0
+CURSOR:               .byte 0
+ROW:                  .byte 0
+COLUMN:               .byte 0
+
+                      .bss
+
+display_data:         .res 4 * 40, 0
+
+                      .code
+
+; Initialize the LCD
+; @mod TMP0
+lcd_init:             phaxy
+
+                      ; IO line setup
+                      lda #<(LCD_D4 | LCD_D5 | LCD_D6 | LCD_D7 | LCD_EN1 | LCD_EN2 | LCD_RS)
+                      sta VIA1_ORA
+                      sta VIA1_DDRA
+                      ldx #50
+                      jsr delay_ms
+
+                      lda VIA1_ORA
+                      and #<~(LCD_EN1 | LCD_EN2 | LCD_RS)
+                      sta VIA1_ORA
+
+                      ; Operate on both controllers
+                      lda #<(LCD_EN1 | LCD_EN2)
+                      sta ENABLE_BITS
+
+                      ; Enable the 4 bit interface
+                      lda #$03
+                      jsr write_4bits
+                      ldx #5
+                      jsr delay_ms
+                      lda #$03
+                      jsr write_4bits
+                      ldx #1
+                      jsr delay_ms
+                      lda #$03
+                      jsr write_4bits
+                      ldx #1
+                      jsr delay_ms
+                      lda #$02
+                      jsr write_4bits
+                      ldx #1
+                      jsr delay_ms
+
+                      ; Initial diplay configuration
+                      lda #(CMD_FUNCTIONSET| CTRL_4BIT | CTRL_LINES_2 | CTRL_FONT_5X7)
+                      jsr command
+                      lda #(CMD_DISPLAYCONTROL | CTRL_DISPLAY_OFF)
+                      jsr command
+                      lda #(CMD_DISPLAYCONTROL | CTRL_DISPLAY_ON | CTRL_CURSOR_OFF)
+                      jsr command
+                      lda #(CMD_ENTRYMODESET | CTRL_CURSOR_INC | CTRL_DISPLAY_FIXED)
+                      jsr command
+                      lda #CMD_CLEARDISPLAY
+                      jsr command
+                      lda #CMD_RETURNHOME
+                      jsr command
+
+                      ; Operate on first controller
+                      lda #<(LCD_EN1)
+                      sta ENABLE_BITS
+
+                      lda #0
+                      sta ROW
+                      sta COLUMN
+                      sta CURSOR
+
+                      lda #' '
+                      ldx #(4 * 40 - 1)
+@clear_display_data:  sta display_data,x
+                      dex
+                      bpl @clear_display_data
+                      plaxy
+                      rts
+
+; Send the command in A to the LCD
+; @mod A, X, Y, TMP0
+command:              tax
+                      lda VIA1_ORA
+                      and #<~LCD_RS
+                      sta VIA1_ORA
+                      txa
+                      jmp send
+
+; Send the data in A to the LCD
+; @mod A, X, Y, TMP0
+write:                tax
+                      lda VIA1_ORA
+                      ora #<LCD_RS
+                      sta VIA1_ORA
+                      txa
+                      jmp send
+
+; Send the accu to the LCD
+; @mod A, X, Y, TMP0
+send:                 tay
+                      lsr
+                      lsr
+                      lsr
+                      lsr
+                      jsr write_4bits
+                      tya
+                      and #$0f
+                      jsr write_4bits
+                      rts
+
+; Send A[0..3] to the LCD, assumes A[4..7] = 0
+; @mod A, X, TMP0
+write_4bits:          sta TMP0
+                      lda VIA1_ORA
+                      and #$f0
+                      ora TMP0
+                      sta VIA1_ORA
+                      jsr pulse_enable
+                      rts
+
+; Send an enable pulse to the LCD
+; @mod A, X
+pulse_enable:         lda ENABLE_BITS
+                      eor #$ff
+                      and VIA1_ORA
+                      sta VIA1_ORA
+                      ldx #50
+@delay1:              dex
+                      bne @delay1
+                      lda ENABLE_BITS
+                      ora VIA1_ORA
+                      sta VIA1_ORA
+                      ldx #200
+@delay2:              dex
+                      bne @delay2
+                      lda ENABLE_BITS
+                      eor #$ff
+                      and VIA1_ORA
+                      sta VIA1_ORA
+                      ldx #50
+@delay3:              dex
+                      bne @delay3
+                      rts
+
+; Send a command to the display
+; @in A The command to send
+lcd_command:          phaxy
+                      jsr command
+                      plaxy
+                      rts
+
+; Print the character in A onto the LCD
+lcd_putc:             phaxy
+                      cmp #$0a
+                      beq @newline
+                      jsr write
+                      plaxy
+                      rts
+@newline:             ldy ROW
+                      cpy #3
+                      beq @scroll
+                      iny
+                      ldx #0
+                      jsr lcd_goto
+                      plaxy
+                      rts
+@scroll:              jsr lcd_clear
+                      plaxy
+                      rts
+
+; Print the zero terminated string pointed onto the LCD
+lcd_puts:             phaxy
+                      ldy #0
+@next_char:           sty TMP1
+                      lda (R0),y
+                      beq @eos
+                      jsr lcd_putc
+                      ldy TMP1
+                      iny
+                      bne @next_char
+@eos:                 plaxy
+                      rts
+
+; Set the cursor the position X (column) and Y (row)
+; X must be in the range 0..39 and Y in 0..3
+lcd_goto:             phaxy
+                      stx COLUMN
+                      sty ROW
+                      lda #(CMD_DISPLAYCONTROL | CTRL_DISPLAY_ON | CTRL_CURSOR_OFF)
+                      jsr command
+                      ldy ROW
+                      lda row_enables,y
+                      sta ENABLE_BITS
+                      lda COLUMN
+                      clc
+                      adc row_offsets,y
+                      adc #CMD_SETDDRAMADDR
+                      jsr command
+                      lda CURSOR
+                      ora #(CMD_DISPLAYCONTROL | CTRL_DISPLAY_ON)
+                      jsr command
+                      plaxy
+                      rts
+
+row_offsets:          .byte $00, $40, $00, $40
+row_enables:          .byte LCD_EN1, LCD_EN1, LCD_EN2, LCD_EN2
+
+; Clear the display
+lcd_clear:            phaxy
+                      lda #<(LCD_EN1 | LCD_EN2)
+                      sta ENABLE_BITS
+                      lda #CMD_CLEARDISPLAY
+                      jsr command
+                      ldx #0
+                      ldy #0
+                      jsr lcd_goto
+                      lda #CMD_CLEARDISPLAY
+                      jsr command
+                      plaxy
+
+; Show the cursor
+lcd_cursor_on:        phaxy
+                      lda #CTRL_CURSOR_ON
+                      sta CURSOR
+                      ora #(CMD_DISPLAYCONTROL| CTRL_DISPLAY_ON)
+                      jsr command
+                      plaxy
+                      rts
+
+; Show a blinking cursor
+lcd_cursor_blink:     phaxy
+                      lda #(CTRL_CURSOR_ON | CTRL_CURSOR_BLINK)
+                      sta CURSOR
+                      ora #(CMD_DISPLAYCONTROL| CTRL_DISPLAY_ON)
+                      jsr command
+                      plaxy
+                      rts
+
+; Hide the cursor
+lcd_cursor_off:       phaxy
+                      lda #CTRL_CURSOR_OFF
+                      sta CURSOR
+                      ora #(CMD_DISPLAYCONTROL| CTRL_DISPLAY_ON)
+                      jsr command
+                      plaxy
+                      rts

@@ -1,0 +1,97 @@
+                    .include "zeropage.inc65"
+                    .include "io.inc65"
+                    .include "macros.inc65"
+
+                    .export _acia_init
+                    .export _acia_getc
+                    .export _acia_gets
+                    .export _acia_putc
+                    .export _acia_puts
+                    .export _acia_put_newline
+
+                    .import popax
+
+                    .code
+
+; void acia_init()
+; Initialize the ACIA
+_acia_init:         pha
+                    lda #(ACIA_PARITY_DISABLE | ACIA_ECHO_DISABLE | ACIA_TX_INT_DISABLE_RTS_LOW | ACIA_RX_INT_DISABLE | ACIA_DTR_LOW)
+                    sta ACIA_COMMAND
+                    lda #(ACIA_STOP_BITS_1 | ACIA_DATA_BITS_8 | ACIA_CLOCK_INT | ACIA_BAUD_9600)
+                    sta ACIA_CONTROL
+                    pla
+                    rts
+
+; void acia_putc(char c)
+; Send the character c to the serial line
+; @in A (c) character to send
+_acia_putc:         pha
+@wait_txd_empty:    lda ACIA_STATUS
+                    and #ACIA_STATUS_TX_EMPTY
+                    beq @wait_txd_empty
+                    pla
+                    sta ACIA_DATA
+                    rts
+
+; void acia_puts(const char * s)
+; Send the zero terminated string pointed to by A/X
+; @in A/X (s) pointer to the string to send
+; @mod ptr1
+_acia_puts:         phay
+                    sta ptr1
+                    stx ptr1 + 1
+                    ldy #0
+@next_char:         lda (ptr1),y
+                    beq @eos
+                    jsr _acia_putc
+                    iny
+                    bne @next_char
+@eos:               play
+                    rts
+
+; void acia_put_newline()
+; Send a newline character
+_acia_put_newline:  pha
+                    lda #$0a
+                    jsr _acia_putc
+                    pla
+                    rts
+
+; char acia_getc()
+; Wait until a character was reveiced and return it
+; @out A The received character
+_acia_getc:
+@wait_rxd_full:     lda ACIA_STATUS
+                    and #ACIA_STATUS_RX_FULL
+                    beq @wait_rxd_full
+                    lda ACIA_DATA
+                    rts
+
+; void acia_gets(char * buffer, unsigned char n)
+; Wait until a \n terminated string was received and store it at buffer
+; n is the maximum number of characters to read
+; The \n is removed and the string is zero terminated
+; After receiving the maximum number of characters, any following characters are discarded
+; The buffer must be of size maximum number of characters plus 1
+; @in A (n) The buffer length minus one
+; @in popax (buffer) A pointer to the buffer
+_acia_gets:         sta tmp1
+                    phay
+                    jsr popax
+                    sta ptr1
+                    stx ptr1 + 1
+                    ldy #0
+@next_char:         jsr _acia_getc
+                    cmp #$0a
+                    beq @eos
+                    ; Check if end of buffer reached
+                    cpy tmp1
+                    beq @next_char
+                    sta (ptr1),y
+                    iny
+                    bne @next_char
+@eos:               lda #0
+                    sta (ptr1),y
+                    play
+                    rts

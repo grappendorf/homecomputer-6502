@@ -1,0 +1,39 @@
+            .include "zeropage.inc65"
+
+            .export _delay_ms
+
+            .code
+            .align 256
+
+; void delay_ms(unsigned char delay)
+; Delay the number of miliseconds specified by A
+; This is hardcoded for a 1 MHz system clock
+; @in A (delay) The delay in ms
+; @mod tmp1
+_delay_ms:          sta tmp1      ; 3
+                    txa           ; 2
+                    pha           ; 3
+                    tya           ; 2
+                    pha           ; 3
+                    ldx tmp1      ; 3
+
+                    ldy #190      ; 2
+@loop1:             dey           ; 190 * 2
+                    bne @loop1    ; 190 * 3 - 1
+
+@loop2:             dex           ; 2
+                    beq @return   ; (x - 1) * 2 + 3
+
+                    nop           ; 2
+                    ldy #198      ; 2
+@loop3:             dey           ; 198 * 2
+                    bne @loop3    ; 198 * 3 - 1
+
+                    jmp @loop2    ; 3
+
+@return:            pla           ; 4
+                    tay           ; 2
+                    pla           ; 4
+                    tax           ; 2
+                    lda tmp1      ; 3
+                    rts           ; 6 (+ 6 for JSR)
