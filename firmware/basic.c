@@ -34,6 +34,9 @@ const char const * keywords[] = {
   "cls",
   "home",
   "synth",
+  "let",
+  "clear",
+  "vars",
   0
 };
 
@@ -52,6 +55,9 @@ void cmd_sleep(const char *args);
 void cmd_cls(const char *args);
 void cmd_home(const char *args);
 void cmd_synth(const char *args);
+void cmd_let(const char *args);
+void cmd_clear(const char *args);
+void cmd_vars(const char *args);
 
 const command_function command_functions[] = {
   cmd_goto,
@@ -68,7 +74,10 @@ const command_function command_functions[] = {
   cmd_sleep,
   cmd_cls,
   cmd_home,
-  cmd_synth
+  cmd_synth,
+  cmd_let,
+  cmd_clear,
+  cmd_vars
 };
 
 char print_buffer[41];
@@ -80,11 +89,29 @@ typedef struct _program_line {
   struct _program_line * next;
 } program_line;
 
-program_line * program = 0;
+program_line * program = NULL;
 
 program_line * current_line;
 
 unsigned char error = 0;
+
+#define VAR_TYPE_INTEGER 0
+#define VAR_TYPE_STRING 1
+
+#define VAR_PRINT_VALUE   0
+#define VAR_PRINT_VERBOSE 1
+
+typedef struct _variable {
+  unsigned int name;
+  unsigned char type;
+  union {
+    int integer;
+    char *string;
+  } value;
+  struct _variable *next;
+} variable;
+
+variable *variables = NULL;
 
 /**
  * Skip any whitespace in the argument string pointed to by args.
@@ -224,7 +251,7 @@ void interpret(char *s) {
  * the string argument is returned from parse_string().
  * If no string argument is found, NULL is returned.
  */
-const char * parse_string(const char *args, const char **start, const char **end) {
+const char *parse_string(const char *args, const char **start, const char **end) {
   const char * right_mark;
   if (*args == '"') {
     right_mark = strrchr(args, '"');
@@ -235,6 +262,131 @@ const char * parse_string(const char *args, const char **start, const char **end
     }
   }
   return NULL;
+}
+
+/**
+ * Parse an integer argument(+-0..9+) in the string pointed to by args.
+ * If an integer argument is found, its value is returned in value and a pointer
+ * behind the integer argument is returned from parse_integer().
+ * If no integer argument is found, NULL is returned.
+ */
+const char *parse_integer(const char *args, int *value) {
+  if(*args == '+' || *args == '-' || isdigit(*args)) {
+    const char * next_args = args + 1;
+    while (isdigit(*next_args)) {
+      ++next_args;
+    }
+    sscanf(args, "%d", value);
+    return next_args;
+  }
+  return NULL;
+}
+
+/**
+ * Find the variable with the given name.
+ * Returns NULL if the variable wasn't found.
+ * Returns a pointer to the previous variable in prev if prev != NULL.
+ */
+variable * find_variable(unsigned int name, variable **prev) {
+  variable *v = variables;
+  if (prev) {
+    *prev = NULL;
+  }
+  while (v && v->name != name) {
+    if (prev) {
+      *prev = v;
+    }
+    v = v->next;
+  }
+  return v;
+}
+
+/**
+ * Create a new variable with name name, type type and value value.
+ * Override the variable if it is already defined.
+ */
+void create_variable(unsigned int name, unsigned char type, const char *value) {
+  variable *new_v;
+  variable *prev_v;
+  variable *v = find_variable(name, &prev_v);
+  if (v) {
+    if (v->type == VAR_TYPE_STRING) {
+      free(v->value.string);
+    }
+    new_v = v;
+  } else {
+    new_v = malloc(sizeof(variable));
+    new_v->name = name;
+    new_v->next = variables;
+    variables = new_v;
+  }
+  new_v->type = type;
+  switch (type) {
+    case VAR_TYPE_INTEGER: {
+      int integer;
+      if (parse_integer(value, &integer)) {
+        new_v->value.integer = integer;
+      } else {
+        syntax_error();
+      }
+      break;
+    }
+    case VAR_TYPE_STRING: {
+      const char *start;
+      const char *end;
+      if (parse_string(value, &start, &end)) {
+        unsigned char len = (end - start) + 1;
+        new_v->value.string = malloc(len + 1);
+        memcpy(new_v->value.string, start, len);
+        new_v->value.string[len] = '\0';
+      } else {
+        syntax_error();
+      }
+      break;
+    }
+  }
+}
+
+/**
+ * Delete the variable with the name name.
+ */
+void delete_variable(unsigned int name) {
+  variable *prev_v;
+  variable *v = find_variable(name, &prev_v);
+  if (v) {
+    if (v->type == VAR_TYPE_STRING) {
+      free(v->value.string);
+    }
+    if (v == variables) {
+      variables = v->next;
+    } else {
+      prev_v->next = v->next;
+    }
+    free(v);
+  }
+}
+
+/**
+ * Print the value of the variable v.
+ * If mode == VAR_PRINT_VERBOSE, a verbose representation is printed
+ * (e.g. "..." for strings).
+ */
+void print_variable(variable *v, unsigned char mode) {
+  switch (v->type) {
+    case VAR_TYPE_INTEGER:
+      sprintf(print_buffer, "%d", v->value.integer);
+      lcd_puts(print_buffer);
+      break;
+    case VAR_TYPE_STRING:
+      if (mode == VAR_PRINT_VERBOSE) {
+        lcd_putc('"');
+      }
+      lcd_puts(v->value.string);
+      if (mode == VAR_PRINT_VERBOSE) {
+        lcd_putc('"');
+      }
+      break;
+  }
 }
 
 void cmd_print_time(const char *) {
@@ -257,6 +409,9 @@ void cmd_led(const char * args) {
   }
 }
 
+/**
+ * Print a string constant or a variable value.
+ */
 void cmd_print(const char * args) {
   if (args[0] == '"') {
     const char *start;
@@ -269,6 +424,21 @@ void cmd_print(const char * args) {
       lcd_put_newline();
     } else {
       syntax_error_malformed_string();
+    }
+  } else if (isalpha(*args)) {
+    variable *v;
+    unsigned int name = *args;
+    ++args;
+    if (isalnum(*args)) {
+      name << 8;
+      name |= *args;
+    }
+    v = find_variable(name, NULL);
+    if (v) {
+      print_variable(v, VAR_PRINT_VALUE);
+      lcd_put_newline();
+    } else {
+      syntax_error_msg("Variable to found!");
     }
   } else if (*args == 0) {
     // Print nothing
@@ -339,8 +509,12 @@ void cmd_goto(const char *args) {
   }
 }
 
-void cmd_new(const char *) {
+/**
+ * Clear the program and the variables.
+ */
+void cmd_new(const char *args) {
   program_line * line = program;
+  cmd_clear(args);
   while (line) {
     program_line * next = line->next;
     free(line->args);
@@ -418,4 +592,73 @@ void cmd_synth(const char *) {
   lcd_puts("A S D F G H J K L");
   sid_synth();
   lcd_clear();
+}
+
+/**
+ * Assign a value to a variable or delete the variable if no assignment is given.
+ */
+void cmd_let(const char *args) {
+  unsigned char type = VAR_TYPE_INTEGER;
+  unsigned int name;
+  if (isalpha(*args)) {
+    name = *args;
+    ++args;
+    if (isalnum(*args)) {
+      name << 8;
+      name |= *args;
+      ++args;
+    }
+    if (*args == '$') {
+      type = VAR_TYPE_STRING;
+      ++args;
+    }
+    args = skip_whitespace(args);
+    if (*args == '=') {
+      args = skip_whitespace(args + 1);
+      create_variable(name, type, args);
+    } else if (*args == '\0') {
+      delete_variable(name);
+    } else {
+      syntax_error();
+    }
+  } else {
+    syntax_error();
+  }
+}
+
+/**
+ * Delete all variables.
+ */
+void cmd_clear(const char *) {
+  variable *v = variables;
+  variable *delete_v;
+  while (v) {
+    delete_v = v;
+    v = v->next;
+    if (delete_v->type == VAR_TYPE_STRING) {
+      free(delete_v->value.string);
+    }
+    free(delete_v);
+  }
+  variables = NULL;
+}
+
+/**
+ * List all variables.
+ */
+void cmd_vars(const char *) {
+  variable *v = variables;
+  while (v) {
+    if (v->name > 256) {
+      lcd_putc(v->name >> 8);
+    }
+    lcd_putc(v->name & 0xff);
+    if (v->type == VAR_TYPE_STRING) {
+      lcd_putc('$');
+    }
+    lcd_puts(" = ");
+    print_variable(v, VAR_PRINT_VERBOSE);
+    lcd_put_newline();
+    v = v->next;
+  }
 }
