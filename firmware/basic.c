@@ -86,7 +86,18 @@ program_line * current_line;
 
 unsigned char error = 0;
 
-unsigned char * find_args(char *s) {
+/**
+ * Skip any whitespace in the argument string pointed to by args.
+ * Returns a pointer to the first non whitespace character.
+ */
+const char * skip_whitespace(const char *args) {
+  while (*args == ' ') {
+    ++args;
+  }
+  return args;
+}
+
+const char * find_args(char *s) {
   char * args = s;
   while (*args && *args != ' ') {
     ++args;
@@ -95,7 +106,7 @@ unsigned char * find_args(char *s) {
     *args = '\0';
     ++args;
   }
-  return args;
+  return skip_whitespace(args);
 }
 
 unsigned char find_keyword(char *s) {
@@ -125,7 +136,7 @@ void syntax_error() {
 
 void execute(char *s) {
   unsigned char command;
-  char * args;
+  const char * args;
   current_line = 0;
   args = find_args(s);
   command = find_keyword(s);
@@ -157,7 +168,7 @@ void delete_line(unsigned int line_number) {
 
 void create_line(unsigned int line_number, char *s) {
   unsigned char command;
-  char * args;
+  const char * args;
   program_line * new_line;
   args = find_args(s);
   command = find_keyword(s);
@@ -185,7 +196,7 @@ void create_line(unsigned int line_number, char *s) {
 }
 
 void interpret(char *s) {
-  char * command = s;
+  const char * command = s;
   unsigned int line_number;
 
   if (strlen(s) == 0) {
@@ -195,14 +206,14 @@ void interpret(char *s) {
   if (isdigit(s[0])) {
     sscanf(s, "%u", &line_number);
     command = strchr(s, ' ');
+    command = skip_whitespace(command);
     if (command) {
-      ++command;
-      create_line(line_number, command);
+      create_line(line_number, (char *) command);
     } else {
       delete_line(line_number);
     }
   } else {
-    execute(command);
+    execute((char *) command);
   }
 }
 
