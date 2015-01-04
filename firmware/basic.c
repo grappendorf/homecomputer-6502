@@ -25,6 +25,7 @@ const char const * keywords[] = {
   "uptime",
   "led",
   "print",
+  "println",
   "list",
   "new",
   "free",
@@ -46,6 +47,7 @@ void cmd_print_time(const char *args);
 void cmd_print_uptime(const char *args);
 void cmd_led(const char *args);
 void cmd_print(const char *args);
+void cmd_println(const char *args);
 void cmd_list(const char *args);
 void cmd_new(const char *args);
 void cmd_free(const char *args);
@@ -66,6 +68,7 @@ const command_function command_functions[] = {
   cmd_print_uptime,
   cmd_led,
   cmd_print,
+  cmd_println,
   cmd_list,
   cmd_new,
   cmd_free,
@@ -389,13 +392,19 @@ void print_variable(variable *v, unsigned char mode) {
   }
 }
 
+/**
+ * Print the current time (without newline).
+ */
 void cmd_print_time(const char *) {
-  sprintf(print_buffer, "%02d:%02d:%02d\n", time_hours(), time_minutes(), time_seconds());
+  sprintf(print_buffer, "%02d:%02d:%02d", time_hours(), time_minutes(), time_seconds());
   lcd_puts(print_buffer);
 }
 
-void cmd_print_uptime(const char * args) {
-  sprintf(print_buffer, "%ld %s\n", time_millis(), args);
+/**
+ * Print the current time in milliseconds (without newline).
+ */
+void cmd_print_uptime(const char *) {
+  sprintf(print_buffer, "%ld", time_millis());
   lcd_puts(print_buffer);
 }
 
@@ -410,7 +419,7 @@ void cmd_led(const char * args) {
 }
 
 /**
- * Print a string constant or a variable value.
+ * Print a string constant or a variable value (no newline).
  */
 void cmd_print(const char * args) {
   if (args[0] == '"') {
@@ -421,7 +430,6 @@ void cmd_print(const char * args) {
       for (; start <= end; ++start) {
         lcd_putc(*start);
       }
-      lcd_put_newline();
     } else {
       syntax_error_malformed_string();
     }
@@ -436,7 +444,6 @@ void cmd_print(const char * args) {
     v = find_variable(name, NULL);
     if (v) {
       print_variable(v, VAR_PRINT_VALUE);
-      lcd_put_newline();
     } else {
       syntax_error_msg("Variable to found!");
     }
@@ -444,6 +451,16 @@ void cmd_print(const char * args) {
     // Print nothing
   } else {
     syntax_error();
+  }
+}
+
+/**
+ * Does a print and then a newline.
+ */
+void cmd_println(const char *args) {
+  cmd_print(args);
+  if (! error) {
+    lcd_put_newline();
   }
 }
 

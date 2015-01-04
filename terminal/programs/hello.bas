@@ -1,2 +1,2 @@
-10 print "hello"
+10 println "hello"
 20 goto 10
