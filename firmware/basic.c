@@ -10,6 +10,7 @@
 #include "keys.h"
 #include "sid.h"
 
+#define syntax_error_malformed_string() syntax_error_msg("Malformed string argument!")
 char argbuf[40];
 char loadbuf[40];
 
@@ -119,7 +120,7 @@ void syntax_error_msg(char *msg) {
 }
 
 void syntax_error() {
-  syntax_error_msg("Syntax error!\n");
+  syntax_error_msg("Syntax error!");
 }
 
 void execute(char *s) {
@@ -205,6 +206,26 @@ void interpret(char *s) {
   }
 }
 
+/**
+ * Parse a string argument ("...") in the string pointed to by args.
+ * If a string argument is found, a pointer to its first character is returned in
+ * start, a pointer to its last character is returned in end and a pointer behind
+ * the string argument is returned from parse_string().
+ * If no string argument is found, NULL is returned.
+ */
+const char * parse_string(const char *args, const char **start, const char **end) {
+  const char * right_mark;
+  if (*args == '"') {
+    right_mark = strrchr(args, '"');
+    if (right_mark != args) {
+      *start = args + 1;
+      *end = right_mark - 1;
+      return right_mark + 1;
+    }
+  }
+  return NULL;
+}
+
 void cmd_print_time(const char *) {
   sprintf(print_buffer, "%02d:%02d:%02d\n", time_hours(), time_minutes(), time_seconds());
   lcd_puts(print_buffer);
@@ -226,12 +247,18 @@ void cmd_led(const char * args) {
 }
 
 void cmd_print(const char * args) {
-  if (args[0] == '"' && args[strlen(args) - 1] == '"') {
-    const char * p = args + 1;
-    for (; *p != '"'; ++p) {
-      lcd_putc(*p);
+  if (args[0] == '"') {
+    const char *start;
+    const char *end;
+    args = parse_string(args, &start, &end);
+    if (args) {
+      for (; start <= end; ++start) {
+        lcd_putc(*start);
+      }
+      lcd_put_newline();
+    } else {
+      syntax_error_malformed_string();
     }
-    lcd_put_newline();
   } else if (*args == 0) {
     // Print nothing
   } else {
