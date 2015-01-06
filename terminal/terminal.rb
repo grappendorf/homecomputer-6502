@@ -37,6 +37,15 @@ def cmd_load serial, filename
   end
 end
 
+def cmd_dir serial
+  Dir.new('programs').select{|f|f =~ /.+\..+/}.each do |filename|
+    serial.gets
+    serial.puts filename
+  end
+  serial.gets
+  serial.puts '*EOF'
+end
+
 while true do
   begin
     line = serial.gets.chomp
@@ -47,6 +56,8 @@ while true do
           cmd_save serial, "programs/#{$1}#{'.bas' unless $1.include? '.'}"
         when /\*LOAD "((\w|\.| )+)"/
           cmd_load serial, "programs/#{$1}#{'.bas' unless $1.include? '.'}"
+        when /\*DIR/
+          cmd_dir serial
       end
     rescue ArgumentError
     end

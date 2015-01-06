@@ -32,6 +32,7 @@ const char const * keywords[] = {
   "free",
   "save",
   "load",
+  "dir",
   "sleep",
   "cls",
   "home",
@@ -55,6 +56,7 @@ void cmd_new(const char *args);
 void cmd_free(const char *args);
 void cmd_save(const char *args);
 void cmd_load(const char *args);
+void cmd_dir(const char *args);
 void cmd_sleep(const char *args);
 void cmd_cls(const char *args);
 void cmd_home(const char *args);
@@ -77,6 +79,7 @@ const command_function command_functions[] = {
   cmd_free,
   cmd_save,
   cmd_load,
+  cmd_dir,
   cmd_sleep,
   cmd_cls,
   cmd_home,
@@ -545,7 +548,11 @@ void cmd_free(const char *) {
   lcd_puts(print_buffer);
 }
 
-void cmd_save(const char * args) {
+/**
+ * Save a program by sending it to the terminal program over the serial line.
+ * SAVE "<filename>"
+ */
+void cmd_save(const char *args) {
   program_line *line;
   const char *start;
   const char *end;
@@ -571,7 +578,11 @@ void cmd_save(const char * args) {
   }
 }
 
-void cmd_load(const char * args) {
+/**
+ * Load a program by reading it from the terminal program over the serial line.
+ * LOAD "<filename>"
+ */
+void cmd_load(const char *args) {
   const char *start;
   const char *end;
   if (parse_string(args, &start, &end)) {
@@ -603,6 +614,26 @@ void cmd_load(const char * args) {
   } else {
     syntax_error_msg("String expected!");
   }
+}
+
+/**
+ * List all programs stored on the terminal host over the serial line.
+ * DIR
+ */
+void cmd_dir(const char *) {
+  lcd_puts("Directory listing:\n");
+  acia_puts("*DIR\n");
+  for(;;) {
+    acia_puts("*NEXT\n");
+    acia_gets(loadbuf, 40);
+    if (strncmp("*EOF", loadbuf, 4) == 0) {
+      break;
+    } else {
+      lcd_puts(loadbuf);
+      lcd_put_newline();
+    }
+  }
+  lcd_puts("Ok.\n");
 }
 
 unsigned long delay;
