@@ -547,38 +547,62 @@ void cmd_free(const char *) {
 
 void cmd_save(const char * args) {
   program_line *line;
-  lcd_puts("Saving...");
-  acia_puts("*SAVE ");
-  acia_puts(args);
-  acia_puts("\n");
-  line = program;
-  while (line) {
-    sprintf(print_buffer, "%u %s %s\n", line->number, keywords[line->command], line->args);
-    acia_puts(print_buffer);
-    line = line->next;
-    lcd_putc('.');
+  const char *start;
+  const char *end;
+  if (parse_string(args, &start, &end)) {
+    lcd_puts("Saving...");
+    acia_puts("*SAVE \"");
+    while (start <= end) {
+      acia_putc(*start);
+      ++start;
+    }
+    acia_puts("\"\n");
+    line = program;
+    while (line) {
+      sprintf(print_buffer, "%u %s %s\n", line->number, keywords[line->command], line->args);
+      acia_puts(print_buffer);
+      line = line->next;
+      lcd_putc('.');
+    }
+    acia_puts("*EOF\n");
+    lcd_puts("\nOk.\n");
+  } else {
+    syntax_error_msg("String expected!");
   }
-  acia_puts("*EOF\n");
-  lcd_puts("\nOk.\n");
 }
 
 void cmd_load(const char * args) {
-  cmd_new(0);
-  lcd_puts("Loading...");
-  acia_puts("*LOAD ");
-  acia_puts(args);
-  acia_puts("\n");
-  for(;;) {
-    acia_puts("*NEXT\n");
-    acia_gets(loadbuf, 40);
-    if (strncmp("*EOF", loadbuf, 4) == 0) {
-      break;
-    } else {
-      lcd_putc('.');
-      interpret(loadbuf);
+  const char *start;
+  const char *end;
+  if (parse_string(args, &start, &end)) {
+    cmd_new(0);
+    lcd_puts("Loading...");
+    acia_puts("*LOAD \"");
+    while (start <= end) {
+      acia_putc(*start);
+      ++start;
     }
+    acia_puts("\"\n");
+    for(;;) {
+      acia_puts("*NEXT\n");
+      acia_gets(loadbuf, 40);
+      if (strncmp("*EOF", loadbuf, 4) == 0) {
+        break;
+      } else if (strncmp("!NOTFOUND", loadbuf, 9) == 0) {
+        lcd_put_newline();
+        syntax_error_msg("File not found!");
+        break;
+      } else {
+        lcd_putc('.');
+        interpret(loadbuf);
+      }
+    }
+    if (! error) {
+      lcd_puts("\nOk.\n");
+    }
+  } else {
+    syntax_error_msg("String expected!");
   }
-  lcd_puts("\nOk.\n");
 }
 
 unsigned long delay;

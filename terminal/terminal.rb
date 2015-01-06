@@ -21,13 +21,20 @@ def cmd_save serial, filename
 end
 
 def cmd_load serial, filename
-  File.open(filename).each do |line|
+  p filename
+  begin
+    File.open(filename).each do |line|
+      serial.gets
+      serial.puts line
+    end
     serial.gets
-    serial.puts line
+    serial.puts '*EOF'
+    puts "Loaded program from file #{filename}"
+  rescue Errno::ENOENT => x
+    serial.gets
+    puts "File not found: #{filename}"
+    serial.puts '!NOTFOUND'
   end
-  serial.gets
-  serial.puts '*EOF'
-  puts "Loaded program from file #{filename}"
 end
 
 while true do
@@ -36,10 +43,10 @@ while true do
     puts line
     begin
       case line
-        when /\*SAVE (\w+)/
-          cmd_save serial, "programs/#{$1}.bas"
-        when /\*LOAD (\w+)/
-          cmd_load serial, "programs/#{$1}.bas"
+        when /\*SAVE "((\w|\.| )+)"/
+          cmd_save serial, "programs/#{$1}#{'.bas' unless $1.include? '.'}"
+        when /\*LOAD "((\w|\.| )+)"/
+          cmd_load serial, "programs/#{$1}#{'.bas' unless $1.include? '.'}"
       end
     rescue ArgumentError
     end
