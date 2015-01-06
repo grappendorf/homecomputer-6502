@@ -21,7 +21,6 @@ def cmd_save serial, filename
 end
 
 def cmd_load serial, filename
-  p filename
   begin
     File.open(filename).each do |line|
       serial.gets
@@ -49,7 +48,7 @@ end
 while true do
   begin
     line = serial.gets.chomp
-    puts line
+    puts line.chars.select{|i| i.valid_encoding?}.join
     begin
       case line
         when /\*SAVE "((\w|\.| )+)"/
