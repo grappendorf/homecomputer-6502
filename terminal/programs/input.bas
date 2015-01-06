@@ -1,5 +1,5 @@
-10 print "Input your name: "
+10 put "Input your name: "
 20 input n$
-30 print "Hello "
-40 print n$
-50 println "! How are you?"
+30 put "Hello "
+40 put n$
+50 print "! How are you?"

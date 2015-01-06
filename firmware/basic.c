@@ -26,7 +26,7 @@ const char const * keywords[] = {
   "uptime",
   "led",
   "print",
-  "println",
+  "put",
   "list",
   "new",
   "free",
@@ -49,7 +49,7 @@ void cmd_print_time(const char *args);
 void cmd_print_uptime(const char *args);
 void cmd_led(const char *args);
 void cmd_print(const char *args);
-void cmd_println(const char *args);
+void cmd_put(const char *args);
 void cmd_list(const char *args);
 void cmd_new(const char *args);
 void cmd_free(const char *args);
@@ -71,7 +71,7 @@ const command_function command_functions[] = {
   cmd_print_uptime,
   cmd_led,
   cmd_print,
-  cmd_println,
+  cmd_put,
   cmd_list,
   cmd_new,
   cmd_free,
@@ -232,6 +232,8 @@ void create_line(unsigned int line_number, char *s) {
 void interpret(char *s) {
   const char * command = s;
   unsigned int line_number;
+
+  error = 0;
 
   if (strlen(s) == 0) {
     return;
@@ -418,7 +420,7 @@ void cmd_led(const char * args) {
 /**
  * Print a string constant or a variable value (no newline).
  */
-void cmd_print(const char * args) {
+void cmd_put(const char * args) {
   if (args[0] == '"') {
     const char *start;
     const char *end;
@@ -454,8 +456,8 @@ void cmd_print(const char * args) {
 /**
  * Does a print and then a newline.
  */
-void cmd_println(const char *args) {
-  cmd_print(args);
+void cmd_print(const char *args) {
+  cmd_put(args);
   if (! error) {
     lcd_put_newline();
   }
