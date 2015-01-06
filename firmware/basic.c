@@ -9,11 +9,11 @@
 #include "acia.h"
 #include "keys.h"
 #include "sid.h"
+#include "readline.h"
 
 #define syntax_error_malformed_string() syntax_error_msg("Malformed string argument!")
 char argbuf[40];
 char loadbuf[40];
-char inputbuf[43];
 
 typedef void (* command_function) ();
 
@@ -339,16 +339,9 @@ void create_variable(unsigned int name, unsigned char type, const char *value) {
       break;
     }
     case VAR_TYPE_STRING: {
-      const char *start;
-      const char *end;
-      if (parse_string(value, &start, &end)) {
-        unsigned char len = (end - start) + 1;
-        new_v->value.string = malloc(len + 1);
-        memcpy(new_v->value.string, start, len);
-        new_v->value.string[len] = '\0';
-      } else {
-        syntax_error();
-      }
+      unsigned char len = strlen(value);
+      new_v->value.string = malloc(len + 1);
+      strcpy(new_v->value.string, value);
       break;
     }
   }
@@ -639,7 +632,18 @@ void cmd_let(const char *args) {
     args = skip_whitespace(args);
     if (*args == '=') {
       args = skip_whitespace(args + 1);
-      create_variable(name, type, args);
+      if (type == VAR_TYPE_STRING) {
+        const char *start;
+        const char *end;
+        if (parse_string(args, &start, &end)) {
+          *((char *) end + 1) = '\0';
+          create_variable(name, type, start);
+        } else {
+          syntax_error_msg("String expected!");
+        }
+      } else {
+        create_variable(name, type, args);
+      }
     } else if (*args == '\0') {
       delete_variable(name);
     } else {
@@ -691,9 +695,6 @@ void cmd_vars(const char *) {
  * Input a variable from the keyboard.
  */
 void cmd_input(const char *args) {
-  unsigned char last_key = 0xff;
-  char last_char = 0;
-  char *p;
   if (isalpha(*args)) {
     unsigned int name = *args;
     ++args;
@@ -701,30 +702,11 @@ void cmd_input(const char *args) {
       name <<= 8;
       name |= *args;
     }
-    p = inputbuf;
-    *p = '"';
-    ++p;
-    for (;;) {
-      keys_update();
-      if (keys_get_code() != 0xff) {
-        if (last_key == 0xff) {
-          last_key = keys_get_code();
-          if (keys_getc() == '\n') {
-            *p = '"';
-            ++p;
-            *p = '\0';
-            lcd_put_newline();
-            break;
-          } else if (p - inputbuf < 40) {
-            lcd_putc(keys_getc());
-            *p = keys_getc();
-            ++p;
-          }
-        }
-      } else {
-        last_key = 0xff;
-      }
+    if (*args == '$') {
+      char *line = readline();
+      create_variable(name, VAR_TYPE_STRING, line);
+    } else {
+      syntax_error();
     }
-    create_variable(name, VAR_TYPE_STRING, inputbuf);
   }
 }

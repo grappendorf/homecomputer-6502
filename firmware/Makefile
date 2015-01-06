@@ -1,4 +1,4 @@
-C_SOURCES = debug.c basic.c main.c
+C_SOURCES = debug.c readline.c basic.c main.c
 ASM_SOURCES = zeropage.s65 interrupt.s65 startup.s65 utils.s65 sid.s65 acia.s65 led.s65 lcd.s65 keys.s65
 
 %.o: %.c
