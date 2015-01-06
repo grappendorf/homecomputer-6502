@@ -44,27 +44,27 @@ const char const * keywords[] = {
   0
 };
 
-void cmd_goto(const char *args);
-void cmd_run(const char *args);
-void cmd_print_time(const char *args);
-void cmd_print_uptime(const char *args);
-void cmd_led(const char *args);
-void cmd_print(const char *args);
-void cmd_put(const char *args);
-void cmd_list(const char *args);
-void cmd_new(const char *args);
-void cmd_free(const char *args);
-void cmd_save(const char *args);
-void cmd_load(const char *args);
-void cmd_dir(const char *args);
-void cmd_sleep(const char *args);
-void cmd_cls(const char *args);
-void cmd_home(const char *args);
-void cmd_synth(const char *args);
-void cmd_let(const char *args);
-void cmd_clear(const char *args);
-void cmd_vars(const char *args);
-void cmd_input(const char *args);
+void cmd_goto(char *args);
+void cmd_run(char *args);
+void cmd_print_time(char *args);
+void cmd_print_uptime(char *args);
+void cmd_led(char *args);
+void cmd_print(char *args);
+void cmd_put(char *args);
+void cmd_list(char *args);
+void cmd_new(char *args);
+void cmd_free(char *args);
+void cmd_save(char *args);
+void cmd_load(char *args);
+void cmd_dir(char *args);
+void cmd_sleep(char *args);
+void cmd_cls(char *args);
+void cmd_home(char *args);
+void cmd_synth(char *args);
+void cmd_let(char *args);
+void cmd_clear(char *args);
+void cmd_vars(char *args);
+void cmd_input(char *args);
 
 const command_function command_functions[] = {
   cmd_goto,
@@ -124,17 +124,17 @@ typedef struct _variable {
 variable *variables = NULL;
 
 /**
- * Skip any whitespace in the argument string pointed to by args.
+ * Skip any whitespace in the string pointed to by 's'.
  * Returns a pointer to the first non whitespace character.
  */
-const char * skip_whitespace(const char *args) {
-  while (*args == ' ') {
-    ++args;
+char * skip_whitespace(char *s) {
+  while (*s == ' ') {
+    ++s;
   }
-  return args;
+  return s;
 }
 
-const char * find_args(char *s) {
+char * find_args(char *s) {
   char * args = s;
   while (*args && *args != ' ') {
     ++args;
@@ -173,7 +173,7 @@ void syntax_error() {
 
 void execute(char *s) {
   unsigned char command;
-  const char * args;
+  char * args;
   current_line = 0;
   args = find_args(s);
   command = find_keyword(s);
@@ -205,7 +205,7 @@ void delete_line(unsigned int line_number) {
 
 void create_line(unsigned int line_number, char *s) {
   unsigned char command;
-  const char * args;
+  char * args;
   program_line * new_line;
   args = find_args(s);
   command = find_keyword(s);
@@ -233,7 +233,7 @@ void create_line(unsigned int line_number, char *s) {
 }
 
 void interpret(char *s) {
-  const char * command = s;
+  char * command = s;
   unsigned int line_number;
 
   error = 0;
@@ -257,19 +257,18 @@ void interpret(char *s) {
 }
 
 /**
- * Parse a string argument ("...") in the string pointed to by args.
- * If a string argument is found, a pointer to its first character is returned in
- * start, a pointer to its last character is returned in end and a pointer behind
- * the string argument is returned from parse_string().
+ * Parse a string argument ("...") at the beginning of the string pointed to by 's'.
+ * If a string argument is found, a pointer to its first character is returned in 'value',
+ * the terminating '"' character is replaced with '\0' and a pointer begind the string
+ * argument is returned from parse_string().
  * If no string argument is found, NULL is returned.
  */
-const char *parse_string(const char *args, const char **start, const char **end) {
-  const char * right_mark;
-  if (*args == '"') {
-    right_mark = strrchr(args, '"');
-    if (right_mark != args) {
-      *start = args + 1;
-      *end = right_mark - 1;
+char *parse_string(char *s, char **value) {
+  if (*s == '"') {
+    char *right_mark = strchr(s + 1, '"');
+    if (right_mark) {
+      *value = s + 1;
+      *right_mark = '\0';
       return right_mark + 1;
     }
   }
@@ -277,19 +276,19 @@ const char *parse_string(const char *args, const char **start, const char **end)
 }
 
 /**
- * Parse an integer argument(+-0..9+) in the string pointed to by args.
- * If an integer argument is found, its value is returned in value and a pointer
+ * Parse an integer argument(+-0..9+) in the string pointed to by 's'.
+ * If an integer argument is found, its value is returned in 'value' and a pointer
  * behind the integer argument is returned from parse_integer().
  * If no integer argument is found, NULL is returned.
  */
-const char *parse_integer(const char *args, int *value) {
-  if(*args == '+' || *args == '-' || isdigit(*args)) {
-    const char * next_args = args + 1;
-    while (isdigit(*next_args)) {
-      ++next_args;
+char *parse_integer(char *s, int *value) {
+  if(*s == '+' || *s == '-' || isdigit(*s)) {
+    char *next = s + 1;
+    while (isdigit(*next)) {
+      ++next;
     }
-    sscanf(args, "%d", value);
-    return next_args;
+    sscanf(s, "%d", value);
+    return next;
   }
   return NULL;
 }
@@ -317,7 +316,7 @@ variable * find_variable(unsigned int name, variable **prev) {
  * Create a new variable with name name, type type and value value.
  * Override the variable if it is already defined.
  */
-void create_variable(unsigned int name, unsigned char type, const char *value) {
+void create_variable(unsigned int name, unsigned char type, char *value) {
   variable *new_v;
   variable *prev_v;
   variable *v = find_variable(name, &prev_v);
@@ -397,7 +396,7 @@ void print_variable(variable *v, unsigned char mode) {
 /**
  * Print the current time (without newline).
  */
-void cmd_print_time(const char *) {
+void cmd_print_time(char *) {
   sprintf(print_buffer, "%02d:%02d:%02d", time_hours(), time_minutes(), time_seconds());
   lcd_puts(print_buffer);
 }
@@ -405,12 +404,12 @@ void cmd_print_time(const char *) {
 /**
  * Print the current time in milliseconds (without newline).
  */
-void cmd_print_uptime(const char *) {
+void cmd_print_uptime(char *) {
   sprintf(print_buffer, "%ld", time_millis());
   lcd_puts(print_buffer);
 }
 
-void cmd_led(const char * args) {
+void cmd_led(char *args) {
   if (strcmp("on", args) == 0) {
     led_set(1);
   } else if (strcmp("off", args) == 0) {
@@ -423,15 +422,12 @@ void cmd_led(const char * args) {
 /**
  * Print a string constant or a variable value (no newline).
  */
-void cmd_put(const char * args) {
+void cmd_put(char *args) {
   if (args[0] == '"') {
-    const char *start;
-    const char *end;
-    args = parse_string(args, &start, &end);
+    char *value;
+    args = parse_string(args, &value);
     if (args) {
-      for (; start <= end; ++start) {
-        lcd_putc(*start);
-      }
+      lcd_puts(value);
     } else {
       syntax_error_malformed_string();
     }
@@ -459,14 +455,14 @@ void cmd_put(const char * args) {
 /**
  * Does a print and then a newline.
  */
-void cmd_print(const char *args) {
+void cmd_print(char *args) {
   cmd_put(args);
   if (! error) {
     lcd_put_newline();
   }
 }
 
-void cmd_list(const char *args) {
+void cmd_list(char *args) {
   unsigned char range = 0;
   unsigned int from_number;
   unsigned int to_number;
@@ -488,7 +484,7 @@ void cmd_list(const char *args) {
   }
 }
 
-void cmd_run(const char *) {
+void cmd_run(char *) {
   unsigned char command;
   error = 0;
   current_line = program;
@@ -509,7 +505,7 @@ void cmd_run(const char *) {
   }
 }
 
-void cmd_goto(const char *args) {
+void cmd_goto(char *args) {
   unsigned int line_number;
   program_line *line;
   if (isdigit(args[0])) {
@@ -531,7 +527,7 @@ void cmd_goto(const char *args) {
 /**
  * Clear the program and the variables.
  */
-void cmd_new(const char *args) {
+void cmd_new(char *args) {
   program_line * line = program;
   cmd_clear(args);
   while (line) {
@@ -543,7 +539,7 @@ void cmd_new(const char *args) {
   program = 0;
 }
 
-void cmd_free(const char *) {
+void cmd_free(char *) {
   sprintf(print_buffer, "%u bytes free.\n", _heapmemavail());
   lcd_puts(print_buffer);
 }
@@ -552,19 +548,14 @@ void cmd_free(const char *) {
  * Save a program by sending it to the terminal program over the serial line.
  * SAVE "<filename>"
  */
-void cmd_save(const char *args) {
-  program_line *line;
-  const char *start;
-  const char *end;
-  if (parse_string(args, &start, &end)) {
+void cmd_save(char *args) {
+  char *filename;
+  if (parse_string(args, &filename)) {
+    program_line *line = program;
     lcd_puts("Saving...");
     acia_puts("*SAVE \"");
-    while (start <= end) {
-      acia_putc(*start);
-      ++start;
-    }
+    acia_puts(filename);
     acia_puts("\"\n");
-    line = program;
     while (line) {
       sprintf(print_buffer, "%u %s %s\n", line->number, keywords[line->command], line->args);
       acia_puts(print_buffer);
@@ -582,17 +573,13 @@ void cmd_save(const char *args) {
  * Load a program by reading it from the terminal program over the serial line.
  * LOAD "<filename>"
  */
-void cmd_load(const char *args) {
-  const char *start;
-  const char *end;
-  if (parse_string(args, &start, &end)) {
+void cmd_load(char *args) {
+  char *filename;
+  if (parse_string(args, &filename)) {
     cmd_new(0);
     lcd_puts("Loading...");
     acia_puts("*LOAD \"");
-    while (start <= end) {
-      acia_putc(*start);
-      ++start;
-    }
+    acia_puts(filename);
     acia_puts("\"\n");
     for(;;) {
       acia_puts("*NEXT\n");
@@ -620,7 +607,7 @@ void cmd_load(const char *args) {
  * List all programs stored on the terminal host over the serial line.
  * DIR
  */
-void cmd_dir(const char *) {
+void cmd_dir(char *) {
   lcd_puts("Directory listing:\n");
   acia_puts("*DIR\n");
   for(;;) {
@@ -639,7 +626,7 @@ void cmd_dir(const char *) {
 unsigned long delay;
 unsigned long sleep_end_millis;
 
-void cmd_sleep(const char *args) {
+void cmd_sleep(char *args) {
   if (isdigit(args[0])) {
     sscanf(args, "%ul", &delay);
     sleep_end_millis = time_millis() + delay;
@@ -650,15 +637,15 @@ void cmd_sleep(const char *args) {
   }
 }
 
-void cmd_cls(const char *) {
+void cmd_cls(char *) {
   lcd_clear();
 }
 
-void cmd_home(const char *) {
+void cmd_home(char *) {
   lcd_home();
 }
 
-void cmd_synth(const char *) {
+void cmd_synth(char *) {
   lcd_clear();
   lcd_puts("ESC to quit\n");
   lcd_puts("Play sounds with these keys:\n");
@@ -671,7 +658,7 @@ void cmd_synth(const char *) {
 /**
  * Assign a value to a variable or delete the variable if no assignment is given.
  */
-void cmd_let(const char *args) {
+void cmd_let(char *args) {
   unsigned char type = VAR_TYPE_INTEGER;
   unsigned int name;
   if (isalpha(*args)) {
@@ -690,11 +677,9 @@ void cmd_let(const char *args) {
     if (*args == '=') {
       args = skip_whitespace(args + 1);
       if (type == VAR_TYPE_STRING) {
-        const char *start;
-        const char *end;
-        if (parse_string(args, &start, &end)) {
-          *((char *) end + 1) = '\0';
-          create_variable(name, type, start);
+        char *value;
+        if (parse_string(args, &value)) {
+          create_variable(name, type, value);
         } else {
           syntax_error_msg("String expected!");
         }
@@ -714,7 +699,7 @@ void cmd_let(const char *args) {
 /**
  * Delete all variables.
  */
-void cmd_clear(const char *) {
+void cmd_clear(char *) {
   variable *v = variables;
   variable *delete_v;
   while (v) {
@@ -731,7 +716,7 @@ void cmd_clear(const char *) {
 /**
  * List all variables.
  */
-void cmd_vars(const char *) {
+void cmd_vars(char *) {
   variable *v = variables;
   while (v) {
     if (v->name > 256) {
@@ -751,7 +736,7 @@ void cmd_vars(const char *) {
 /**
  * Input a variable from the keyboard.
  */
-void cmd_input(const char *args) {
+void cmd_input(char *args) {
   if (isalpha(*args)) {
     unsigned int name = *args;
     ++args;
