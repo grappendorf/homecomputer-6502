@@ -261,7 +261,8 @@ void interpret(char *s) {
  * If a string argument is found, a pointer to its first character is returned in 'value',
  * the terminating '"' character is replaced with '\0' and a pointer begind the string
  * argument is returned from parse_string().
- * If no string argument is found, NULL is returned.
+ * You need to restore the '"' character, if you want to reuse 's'
+ * If no string argument is found, NULL is returned and 's' is not modified.
  */
 char *parse_string(char *s, char **value) {
   if (*s == '"') {
@@ -274,6 +275,8 @@ char *parse_string(char *s, char **value) {
   }
   return NULL;
 }
+
+#define parse_string_restore(s) *(s + strlen(s)) = '"';
 
 /**
  * Parse an integer argument(+-0..9+) in the string pointed to by 's'.
@@ -428,6 +431,7 @@ void cmd_put(char *args) {
     args = parse_string(args, &value);
     if (args) {
       lcd_puts(value);
+      parse_string_restore(value);
     } else {
       syntax_error_malformed_string();
     }
@@ -556,6 +560,7 @@ void cmd_save(char *args) {
     acia_puts("*SAVE \"");
     acia_puts(filename);
     acia_puts("\"\n");
+    parse_string_restore(filename);
     while (line) {
       sprintf(print_buffer, "%u %s %s\n", line->number, keywords[line->command], line->args);
       acia_puts(print_buffer);
@@ -581,6 +586,7 @@ void cmd_load(char *args) {
     acia_puts("*LOAD \"");
     acia_puts(filename);
     acia_puts("\"\n");
+    parse_string_restore(filename);
     for(;;) {
       acia_puts("*NEXT\n");
       acia_gets(loadbuf, 40);
@@ -680,6 +686,7 @@ void cmd_let(char *args) {
         char *value;
         if (parse_string(args, &value)) {
           create_variable(name, type, value);
+          parse_string_restore(value)
         } else {
           syntax_error_msg("String expected!");
         }
