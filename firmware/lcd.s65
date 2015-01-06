@@ -159,35 +159,21 @@ send:               tay
 ; Send A[0..3] to the LCD, assumes A[4..7] = 0
 ; @mod A, X, tmp1
 write_4bits:        sta tmp1
+
+                    lda lcd_enable_bits     ; E high
+                    ora VIA1_ORA
+                    sta VIA1_ORA
+
+                    lda tmp1                ; Data
                     lda VIA1_ORA
                     and #$f0
                     ora tmp1
                     sta VIA1_ORA
-                    jsr pulse_enable
-                    rts
 
-; Send an enable pulse to the LCD
-; @mod A, X
-pulse_enable:       lda lcd_enable_bits
+                    lda lcd_enable_bits     ; E low
                     eor #$ff
                     and VIA1_ORA
                     sta VIA1_ORA
-                    ldx #50
-@delay1:            dex
-                    bne @delay1
-                    lda lcd_enable_bits
-                    ora VIA1_ORA
-                    sta VIA1_ORA
-                    ldx #200
-@delay2:            dex
-                    bne @delay2
-                    lda lcd_enable_bits
-                    eor #$ff
-                    and VIA1_ORA
-                    sta VIA1_ORA
-                    ldx #50
-@delay3:            dex
-                    bne @delay3
                     rts
 
 ; void lcd_command(unsigned char cmd)
