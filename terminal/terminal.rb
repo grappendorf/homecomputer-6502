@@ -42,7 +42,8 @@ def cmd_dir serial
     if line =~ /\*BREAK/
       return;
     end
-    serial.puts filename
+    size = File.size(File.join 'programs', filename)
+    serial.puts sprintf("%04d %s", size, filename)
   end
   serial.gets
   serial.puts '*EOF'

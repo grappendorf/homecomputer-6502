@@ -624,7 +624,6 @@ void cmd_load(char *args) {
  * DIR
  */
 void cmd_dir(char *) {
-  lcd_puts("Directory listing:\n");
   acia_puts("*DIR\n");
   for(;;) {
     acia_puts("*NEXT\n");
@@ -633,6 +632,7 @@ void cmd_dir(char *) {
       break;
     } else {
       lcd_puts(loadbuf);
+
       lcd_put_newline();
       do {
         if (is_interrupted()) {
