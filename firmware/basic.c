@@ -654,8 +654,11 @@ void cmd_sleep(char *args) {
   if (isdigit(args[0])) {
     sscanf(args, "%ul", &delay);
     sleep_end_millis = time_millis() + delay;
-    while (time_millis() < sleep_end_millis)
-      ;
+    while (time_millis() < sleep_end_millis) {
+      if (is_interrupted()) {
+        break;
+      }
+    }
   } else {
     syntax_error();
   }
