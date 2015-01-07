@@ -12,6 +12,7 @@ extern unsigned char keys_read_row(unsigned char row);
 #define MODIFIER_CTRL     2
 #define MODIFIER_ALT      4
 
+#define KEY_NONE          255
 #define KEY_ESC           5
 #define KEY_F1            103
 #define KEY_F2            10

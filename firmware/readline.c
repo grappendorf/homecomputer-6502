@@ -1,20 +1,28 @@
 #include "lcd.h"
 #include "keys.h"
 #include "readline.h"
+#include "interrupt.h"
 
 char buffer[81];
 char *buffer_pos;
-unsigned char last_key = 0xff;
+unsigned char last_key = KEY_NONE;
 char last_char = 0;
 
-char * readline() {
+char * readline(unsigned char interruptible) {
+  reset_interrupted();
   buffer_pos = buffer;
 
   for (;;) {
+    if (interruptible && is_interrupted()) {
+      lcd_put_newline();
+      *buffer_pos = '\0';
+      return buffer;
+    }
+
     keys_update();
 
-    if (keys_get_code() != 0xff) {
-      if (last_key == 0xff) {
+    if (keys_get_code() != KEY_NONE) {
+      if (last_key == KEY_NONE) {
         last_key = keys_get_code();
         last_char = keys_getc();
 
@@ -37,7 +45,7 @@ char * readline() {
         }
       }
     } else {
-      last_key = 0xff;
+      last_key = KEY_NONE;
     }
   }
 

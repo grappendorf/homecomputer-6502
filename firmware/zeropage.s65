@@ -28,3 +28,4 @@ lcd_enable_bits:  .res 1
 lcd_cursor:       .res 1
 lcd_row:          .res 1
 lcd_column:       .res 1
+_interrupted:     .res 1

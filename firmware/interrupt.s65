@@ -9,6 +9,7 @@
                   .code
 
 irq_init:         lda #0
+                  sta _interrupted
                   sta _millis
                   sta _millis + 1
                   sta _millis + 2
@@ -27,7 +28,11 @@ irq_init:         lda #0
                   sta VIA1_T1C_H
                   rts
 
-nmi_handler:      rti
+nmi_handler:      pha
+                  lda #$ff
+                  sta _interrupted
+                  pla
+                  rti
 
 irq_handler:      pha
                   txa

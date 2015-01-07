@@ -10,6 +10,7 @@
 #include "keys.h"
 #include "sid.h"
 #include "readline.h"
+#include "interrupt.h"
 
 #define syntax_error_malformed_string() syntax_error_msg("Malformed string argument!")
 char argbuf[40];
@@ -174,6 +175,7 @@ void syntax_error() {
 void execute(char *s) {
   unsigned char command;
   char * args;
+  reset_interrupted();
   current_line = 0;
   args = find_args(s);
   command = find_keyword(s);
@@ -483,9 +485,18 @@ void cmd_list(char *args) {
     if (range == 0 || (line->number >= from_number && line->number <= to_number)) {
       sprintf(print_buffer, "%u %s %s\n", line->number, keywords[line->command], line->args);
       lcd_puts(print_buffer);
+      do {
+        if (is_interrupted()) {
+          lcd_puts("Interrupted.\n");
+          return;
+        }
+        keys_update();
+      } while (keys_get_code() == KEY_NONE);
     }
     line = line->next;
   }
+
+  lcd_puts("Ok.\n");
 }
 
 void cmd_run(char *) {
@@ -493,9 +504,8 @@ void cmd_run(char *) {
   error = 0;
   current_line = program;
   while (current_line) {
-    keys_update();
-    if (keys_get_code() == KEY_BREAK) {
-      lcd_puts("Program interrupted.\n");
+    if (is_interrupted()) {
+      lcd_puts("Interrupted.\n");
       break;
     }
     command = current_line->command;
@@ -624,6 +634,14 @@ void cmd_dir(char *) {
     } else {
       lcd_puts(loadbuf);
       lcd_put_newline();
+      do {
+        if (is_interrupted()) {
+          acia_puts("*BREAK\n");
+          lcd_puts("Interrupted.\n");
+          return;
+        }
+        keys_update();
+      } while (keys_get_code() == KEY_NONE);
     }
   }
   lcd_puts("Ok.\n");
@@ -752,7 +770,7 @@ void cmd_input(char *args) {
       name |= *args;
     }
     if (*args == '$') {
-      char *line = readline();
+      char *line = readline(INTERRUPTIBLE);
       create_variable(name, VAR_TYPE_STRING, line);
     } else {
       syntax_error();

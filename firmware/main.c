@@ -21,7 +21,7 @@ int main() {
   lcd_cursor_blink();
 
   for (;;) {
-    char * line = readline();
+    char * line = readline(NON_INTERRUPTIBLE);
     interpret(line);
   }
 

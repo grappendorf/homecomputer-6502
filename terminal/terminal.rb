@@ -38,7 +38,10 @@ end
 
 def cmd_dir serial
   Dir.new('programs').select{|f|f =~ /.+\..+/}.each do |filename|
-    serial.gets
+    line = serial.gets.chomp
+    if line =~ /\*BREAK/
+      return;
+    end
     serial.puts filename
   end
   serial.gets
