@@ -15,7 +15,7 @@ typedef struct _variable {
   union {
     int integer;
     char *string;
-    int *(* builtin_integer) ();
+    int (* builtin_integer) ();
     char *(* builtin_string) ();
   } value;
   struct _variable *next;
@@ -28,5 +28,7 @@ extern void delete_variable(unsigned int name, unsigned char type);
 extern void print_variable(variable *v, unsigned char mode);
 extern void clear_variables();
 extern void print_all_variables();
+extern char * get_string_variable_value(variable *var);
+extern int get_integer_variable_value(variable *var);
 
 #endif

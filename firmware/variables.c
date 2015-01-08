@@ -62,12 +62,7 @@ void create_variable(unsigned int name, unsigned char type, void *value) {
       if (type & VAR_FLAG_BUILTIN) {
         new_v->value.builtin_string = value;
       } else {
-        int integer;
-        if (parse_integer(value, &integer)) {
-          new_v->value.integer = integer;
-        } else {
-          syntax_error();
-        }
+        new_v->value.integer = *((int *)value);
       }
       break;
     }
@@ -209,3 +204,25 @@ void print_all_variables() {
     v = v->next;
   }
  }
+
+/**
+ * Return the value of a string variable.
+ */
+char * get_string_variable_value(variable *var) {
+  if (var->type & VAR_FLAG_BUILTIN) {
+    return var->value.builtin_string();
+  } else {
+    return var->value.string;
+  }
+}
+
+/**
+ * Return the value of a integer variable.
+ */
+int get_integer_variable_value(variable *var) {
+  if (var->type & VAR_FLAG_BUILTIN) {
+    return var->value.builtin_integer();
+  } else {
+    return var->value.integer;
+  }
+}

@@ -5,5 +5,6 @@
 #define NON_INTERRUPTIBLE 0
 
 extern char * readline(unsigned char interruptible);
+extern char readline_buffer[];
 
 #endif

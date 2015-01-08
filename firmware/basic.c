@@ -13,53 +13,25 @@
 #include "variables.h"
 #include "utils.h"
 #include "basic.h"
-
-#define syntax_error_malformed_string() syntax_error_msg("Malformed string argument!")
-char argbuf[40];
-char loadbuf[40];
-
-typedef void (* command_function) ();
-
-#define CMD_UNKNOWN 0xFF
-#define CMD_GOTO 0
-
-const char const * keywords[] = {
-  "goto",
-  "run",
-  "led",
-  "print",
-  "put",
-  "list",
-  "new",
-  "free",
-  "save",
-  "load",
-  "dir",
-  "sleep",
-  "cls",
-  "home",
-  "synth",
-  "let",
-  "clear",
-  "vars",
-  "input",
-  "at",
-  "cursor",
-  0
-};
+#include "debug.h"
 
 void basic_init();
 void interpret(char *s);
 void execute(char *s);
 
+char *parse_string(char *s, char *value);
+char *parse_integer(char *s, int *value);
+char *parse_variable(char *s, unsigned int *name, unsigned char *type);
+char *parse_operator(char *s, unsigned int *operator);
+unsigned char next_token(char *s);
 char * skip_whitespace(char *s);
 char * find_args(char *s);
 unsigned char find_keyword(char *s);
+
 void syntax_error_msg(char *msg);
 void syntax_error();
-char *parse_string(char *s, char **value);
-void parse_string_restore(char *s);
-char *parse_integer(char *s, int *value);
+#define syntax_error_invalid_string() syntax_error_msg("Invalid string expression!")
+#define syntax_error_invalid_number() syntax_error_msg("Invalid number expression!")
 
 void delete_line(unsigned int line_number);
 void create_line(unsigned int line_number, char *s);
@@ -81,10 +53,11 @@ void cmd_home(char *args);
 void cmd_synth(char *args);
 void cmd_let(char *args);
 void cmd_clear(char *args);
-void cmd_vars(char *args);
 void cmd_input(char *args);
 void cmd_at(char *args);
 void cmd_cursor(char *args);
+
+typedef void (* command_function) ();
 
 const command_function command_functions[] = {
   cmd_goto,
@@ -104,13 +77,40 @@ const command_function command_functions[] = {
   cmd_synth,
   cmd_let,
   cmd_clear,
-  cmd_vars,
   cmd_input,
   cmd_at,
   cmd_cursor
 };
 
+const char const * keywords[] = {
+  "goto",
+  "run",
+  "led",
+  "print",
+  "put",
+  "list",
+  "new",
+  "free",
+  "save",
+  "load",
+  "dir",
+  "sleep",
+  "cls",
+  "home",
+  "synth",
+  "let",
+  "clear",
+  "input",
+  "at",
+  "cursor",
+  0
+};
+
+#define CMD_UNKNOWN 0xFF
+#define CMD_GOTO 0
+
 char print_buffer[41];
+char parsebuf[256];
 
 typedef struct _program_line {
   unsigned int number;
@@ -124,6 +124,13 @@ program_line * program = NULL;
 program_line * current_line;
 
 unsigned char error = 0;
+
+#define TOKEN_NUMBER      0
+#define TOKEN_NUMBER_VAR  1
+#define TOKEN_STRING      2
+#define TOKEN_STRING_VAR  3
+#define TOKEN_EQUAL       4
+#define TOKEN_INVALID     0xFF;
 
 /**
  * Initialize the BASIC interpreter.
@@ -178,10 +185,182 @@ void execute(char *s) {
 }
 
 /**
+ * Parse a number expression 's' (that contains only number values) and return its
+ * resulting value in 'value'.
+ * Return a pointer behind the last character of the expression.
+ * Return NULL if a syntax error occurred.
+ */
+char *parse_number_expression(char *s, int *value) {
+  unsigned int var_name;
+  variable *var;
+  unsigned char var_type;
+  s = skip_whitespace(s);
+  if (next_token(s) == TOKEN_NUMBER) {
+    if (s = parse_integer(s, value)) {
+      return s;
+    } else {
+      syntax_error_invalid_number();
+    }
+  } else if (next_token(s) == TOKEN_NUMBER_VAR) {
+    s = parse_variable(s, &var_name, &var_type);
+    var = find_variable(var_name, VAR_TYPE_INTEGER, NULL);
+    if (var) {
+      *value = get_integer_variable_value(var);
+      return s;
+    } else {
+      syntax_error_msg("Variable not found!");
+    }
+  } else {
+    syntax_error();
+  }
+
+  return NULL;
+}
+
+/**
+ * Parse the string expression 's' (that contains only string values) and return its
+ * resulting value in 'value'.
+ * Return a pointer behind the last character of the expression.
+ * Return NULL if a syntax error occurred.
+ */
+char *parse_string_expression(char *s, char **value) {
+  unsigned int var_name;
+  variable *var;
+  unsigned char var_type;
+  s = skip_whitespace(s);
+  if (next_token(s) == TOKEN_STRING) {
+    if (s = parse_string(s, parsebuf)) {
+      *value = parsebuf;
+      return s;
+    } else {
+      syntax_error_invalid_string();
+    }
+  } else if (next_token(s) == TOKEN_STRING_VAR) {
+    s = parse_variable(s, &var_name, &var_type);
+    var = find_variable(var_name, VAR_TYPE_STRING, NULL);
+    if (var) {
+      *value = get_string_variable_value(var);
+      return s;
+    } else {
+      syntax_error_msg("Variable not found!");
+    }
+  } else {
+    syntax_error();
+  }
+
+  return NULL;
+}
+
+/**
+ * Parse a string argument ("...") at the beginning of the string pointed to by 's'.
+ * If a string argument is found, it is copied to the buffer 'value' and a pointer
+ * behind the string argument is returned from parse_string().
+ * If no string argument is found, NULL is returned and 'value' is not modified.
+ */
+char *parse_string(char *s, char *value) {
+  char *right_mark;
+  s = skip_whitespace(s);
+  if (*s == '"') {
+    ++s;
+    right_mark = strchr(s, '"');
+    if (right_mark) {
+      int len = right_mark - s;
+      strncpy(value, s, len);
+      *(value + len) = '\0';
+      return right_mark + 1;
+    }
+  }
+  return NULL;
+}
+
+/**
+ * Parse an integer argument(+-0..9+) in the string pointed to by 's'.
+ * If an integer argument is found, its value is returned in 'value' and a pointer
+ * behind the integer argument is returned from parse_integer().
+ * If no integer argument is found, NULL is returned.
+ */
+char *parse_integer(char *s, int *value) {
+  s = skip_whitespace(s);
+  if(*s == '+' || *s == '-' || isdigit(*s)) {
+    sscanf(s, "%d", value);
+    ++s;
+    while (isdigit(*s)) {
+      ++s;
+    }
+    return s;
+  }
+  return NULL;
+}
+
+/**
+ * Parse a variable in the string 's' and return its name in 'name', its type
+ * in 'type' and a pointer behind the variable.
+ * If no variable is found, NULL is returned;
+ */
+char *parse_variable(char *s, unsigned int *name, unsigned char *type) {
+  s = skip_whitespace(s);
+  if (isalpha(*s)) {
+    *name = *s;
+    ++s;
+    if (isalnum(*s)) {
+      *name <<= 8;
+      *name |= *s;
+    }
+    while (isalnum(*s)) { ++s; }
+    if (*s == '$') {
+      ++s;
+      *type = VAR_TYPE_STRING;
+    } else {
+      *type = VAR_TYPE_INTEGER;
+    }
+    return s;
+  }
+  return NULL;
+}
+
+/**
+ * Parse an operator in the string 's' and return it in 'operator'.
+ * Return a pointer behind the operator or NULL if no opetator was found.
+ * 'operator' can be NULL if you only want to skip the operator.
+ */
+char *parse_operator(char *s, unsigned int *operator) {
+  s = skip_whitespace(s);
+  if (*s == '=') {
+    if (operator) {
+      *operator = *s;
+    }
+    return s + 1;
+  }
+  return NULL;
+}
+
+/**
+ * Get the token id of the first token in 's'.
+ */
+unsigned char next_token(char *s) {
+  s = skip_whitespace(s);
+  if(*s == '+' || *s == '-' || isdigit(*s)) {
+    return TOKEN_NUMBER;
+  } else if (*s == '"') {
+    return TOKEN_STRING;
+  } else if (isalpha(*s)) {
+    while (isalnum(*s)) { ++s; }
+    if (*s == '$') {
+      return TOKEN_STRING_VAR;
+    } else {
+      return TOKEN_NUMBER_VAR;
+    }
+  } else if (*s == '=') {
+    return TOKEN_EQUAL;
+  }
+  return TOKEN_INVALID;
+}
+
+/**
  * Skip any whitespace in the string pointed to by 's'.
  * Returns a pointer to the first non whitespace character.
  */
-char * skip_whitespace(char *s) {
+char *skip_whitespace(char *s) {
   while (*s == ' ') {
     ++s;
   }
@@ -192,7 +371,7 @@ char * skip_whitespace(char *s) {
  * Find the start of the arguments after the command in 's'.
  * Side-effect: terminate the command with a '\0'.
  */
-char * find_args(char *s) {
+char *find_args(char *s) {
   char * args = s;
   while (*args && *args != ' ') {
     ++args;
@@ -294,52 +473,6 @@ void create_line(unsigned int number, char *s) {
 }
 
 /**
- * Parse a string argument ("...") at the beginning of the string pointed to by 's'.
- * If a string argument is found, a pointer to its first character is returned in 'value',
- * the terminating '"' character is replaced with '\0' and a pointer begind the string
- * argument is returned from parse_string().
- * You need to restore the '"' character, if you want to reuse 's'
- * If no string argument is found, NULL is returned and 's' is not modified.
- */
-char *parse_string(char *s, char **value) {
-  if (*s == '"') {
-    char *right_mark = strchr(s + 1, '"');
-    if (right_mark) {
-      *value = s + 1;
-      *right_mark = '\0';
-      return right_mark + 1;
-    }
-  }
-  return NULL;
-}
-
-/**
- * Restore the '"' character in the string argument 's' (replaces the terminating '\0'
- * with '"', so it assumes another '\0' after the terminating '\0').
- */
-void parse_string_restore(char *s) {
-  *(s + strlen(s)) = '"';
-}
-
-/**
- * Parse an integer argument(+-0..9+) in the string pointed to by 's'.
- * If an integer argument is found, its value is returned in 'value' and a pointer
- * behind the integer argument is returned from parse_integer().
- * If no integer argument is found, NULL is returned.
- */
-char *parse_integer(char *s, int *value) {
-  if(*s == '+' || *s == '-' || isdigit(*s)) {
-    sscanf(s, "%d", value);
-    ++s;
-    while (isdigit(*s)) {
-      ++s;
-    }
-    return s;
-  }
-  return NULL;
-}
-
-/**
  * Enable/Disable the LED.
  * LET ON|OFF
  */
@@ -358,39 +491,23 @@ void cmd_led(char *args) {
  * PUT <expression>
  */
 void cmd_put(char *args) {
-  if (args[0] == '"') {
-    char *value;
-    args = parse_string(args, &value);
-    if (args) {
-      lcd_puts(value);
-      parse_string_restore(value);
-    } else {
-      syntax_error_malformed_string();
+  int number_value;
+  char *string_value;
+  unsigned char token;
+  token = next_token(args);
+  if (token == TOKEN_STRING || token == TOKEN_STRING_VAR) {
+    if (parse_string_expression(args, &string_value)) {
+      lcd_puts(string_value);
     }
-  } else if (isalpha(*args)) {
-    unsigned char type = VAR_TYPE_INTEGER;
-    variable *v;
-    unsigned int name = *args;
-    ++args;
-    if (isalnum(*args)) {
-      name <<= 8;
-      name |= *args;
-      ++args;
+  } else if (token == TOKEN_NUMBER || token == TOKEN_NUMBER_VAR) {
+    if (parse_number_expression(args, &number_value)) {
+      sprintf(print_buffer, "%d", number_value);
+      lcd_puts(print_buffer);
     }
-    if (*args == '$') {
-      type = VAR_TYPE_STRING;
-    }
-    v = find_variable(name, type, NULL);
-    if (v) {
-      print_variable(v, VAR_PRINT_VALUE);
-    } else {
-      syntax_error_msg("Variable not found!");
-    }
-  } else if (*args == 0) {
-    // Print nothing
   } else {
     syntax_error();
   }
+  return;
 }
 
 /**
@@ -517,14 +634,12 @@ void cmd_free(char *) {
  * SAVE "<filename>"
  */
 void cmd_save(char *args) {
-  char *filename;
-  if (parse_string(args, &filename)) {
+  if (parse_string(args, parsebuf)) {
     program_line *line = program;
     lcd_puts("Saving...");
     acia_puts("*SAVE \"");
-    acia_puts(filename);
+    acia_puts(parsebuf);
     acia_puts("\"\n");
-    parse_string_restore(filename);
     while (line) {
       sprintf(print_buffer, "%u %s %s\n", line->number, keywords[line->command], line->args);
       acia_puts(print_buffer);
@@ -543,26 +658,24 @@ void cmd_save(char *args) {
  * LOAD "<filename>"
  */
 void cmd_load(char *args) {
-  char *filename;
-  if (parse_string(args, &filename)) {
+  if (parse_string(args, parsebuf)) {
     cmd_new(0);
     lcd_puts("Loading...");
     acia_puts("*LOAD \"");
-    acia_puts(filename);
+    acia_puts(parsebuf);
     acia_puts("\"\n");
-    parse_string_restore(filename);
     for(;;) {
       acia_puts("*NEXT\n");
-      acia_gets(loadbuf, 40);
-      if (strncmp("*EOF", loadbuf, 4) == 0) {
+      acia_gets(readline_buffer, 255);
+      if (strncmp("*EOF", readline_buffer, 4) == 0) {
         break;
-      } else if (strncmp("!NOTFOUND", loadbuf, 9) == 0) {
+      } else if (strncmp("!NOTFOUND", readline_buffer, 9) == 0) {
         lcd_put_newline();
         syntax_error_msg("File not found!");
         break;
       } else {
         lcd_putc('.');
-        interpret(loadbuf);
+        interpret(readline_buffer);
       }
     }
     if (! error) {
@@ -581,11 +694,11 @@ void cmd_dir(char *) {
   acia_puts("*DIR\n");
   for(;;) {
     acia_puts("*NEXT\n");
-    acia_gets(loadbuf, 40);
-    if (strncmp("*EOF", loadbuf, 4) == 0) {
+    acia_gets(readline_buffer, 255);
+    if (strncmp("*EOF", readline_buffer, 4) == 0) {
       break;
     } else {
-      lcd_puts(loadbuf);
+      lcd_puts(readline_buffer);
 
       lcd_put_newline();
       do {
@@ -653,42 +766,51 @@ void cmd_synth(char *) {
 
 /**
  * Assign a value to a variable or delete the variable if no assignment is given.
+ * List all variables if no arguments are given.
  */
 void cmd_let(char *args) {
-  unsigned char type = VAR_TYPE_INTEGER;
-  unsigned int name;
+  unsigned char token;
+  unsigned int var_name;
+  unsigned char var_type;
 
-  if (isalpha(*args)) {
-    name = *args;
-    ++args;
-    if (isalnum(*args)) {
-      name <<= 8;
-      name |= *args;
-      ++args;
-    }
-    if (*args == '$') {
-      type = VAR_TYPE_STRING;
-      ++args;
-    }
+  skip_whitespace(args);
 
-    args = skip_whitespace(args);
-    if (*args == '=') {
-      args = skip_whitespace(args + 1);
-      if (type == VAR_TYPE_STRING) {
-        char *value;
-        if (parse_string(args, &value)) {
-          create_variable(name, type, value);
-          parse_string_restore(value);
-        } else {
-          syntax_error_msg("String expected!");
-        }
-      } else {
-        create_variable(name, type, args);
+  if (*args == '\0') {
+    print_all_variables();
+    lcd_puts("Ready.\n");
+    return;
+  }
+
+  if (args = parse_variable(args, &var_name, &var_type)) {
+    if (next_token(args) == TOKEN_EQUAL) {
+      args = parse_operator(args, NULL);
+      token = next_token(args);
+      switch (var_type) {
+        case VAR_TYPE_INTEGER:
+          if (token == TOKEN_NUMBER || token == TOKEN_NUMBER_VAR) {
+            int value;
+            if (parse_number_expression(args, &value)) {
+              create_variable(var_name, var_type, &value);
+            }
+          } else {
+            syntax_error_invalid_number();
+          }
+          break;
+        case VAR_TYPE_STRING:
+          if (token == TOKEN_STRING || token == TOKEN_STRING_VAR) {
+            char *value;
+            if (parse_string_expression(args, &value)) {
+              create_variable(var_name, var_type, value);
+            }
+          } else {
+            syntax_error_invalid_string();
+          }
+          break;
       }
-    } else if (*args == '\0') {
-      delete_variable(name, type);
     } else {
-      syntax_error();
+      if (*args == '\0') {
+        delete_variable(var_name, var_type);
+      }
     }
   } else {
     syntax_error();
@@ -700,14 +822,6 @@ void cmd_let(char *args) {
  */
 void cmd_clear(char *) {
   clear_variables();
-}
-
-/**
- * List all variables.
- */
-void cmd_vars(char *) {
-  print_all_variables();
-  lcd_puts("Ready.\n");
 }
 
 /**
