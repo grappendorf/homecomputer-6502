@@ -163,7 +163,7 @@ SID_RES_FILT      = SID_BASE + 23
 SID_MODE_VOLUME   = SID_BASE + 24
 SID_POTX          = SID_BASE + 25
 SID_POTY          = SID_BASE + 26
-SID_OSC3        = SID_BASE + 27
+SID_OSC3          = SID_BASE + 27
 SID_ENV3          = SID_BASE + 28
 
 ; LED

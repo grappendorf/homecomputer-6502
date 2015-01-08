@@ -59,6 +59,7 @@ void cmd_clear(char *args);
 void cmd_input(char *args);
 void cmd_at(char *args);
 void cmd_cursor(char *args);
+void cmd_seed(char *args);
 
 typedef void (* command_function) ();
 
@@ -82,7 +83,8 @@ const command_function command_functions[] = {
   cmd_clear,
   cmd_input,
   cmd_at,
-  cmd_cursor
+  cmd_cursor,
+  cmd_seed
 };
 
 const char const * keywords[] = {
@@ -106,6 +108,7 @@ const char const * keywords[] = {
   "input",
   "at",
   "cursor",
+  "seed",
   0
 };
 
@@ -944,3 +947,16 @@ void cmd_cursor(char *args) {
     syntax_error();
   }
 }
+
+/**
+ * Seed the random number generator (e.g. SEED TI).
+ * SEED <number>
+ */
+void cmd_seed(char *args) {
+  int seed;
+  if (parse_number_expression(args, &seed)) {
+    seed_random_number_variable(seed);
+  }
+}
+
+

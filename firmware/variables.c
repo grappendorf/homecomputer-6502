@@ -151,12 +151,30 @@ int builtin_var_time_integer() {
   return time_millis();
 }
 
+static unsigned int random_number;
+
+/**
+ * Return the value of the builtin rn variable (random value).
+ */
+int builtin_var_random_integer() {
+  random_number = random_number * 31421 + 6927;
+  return random_number & 32727;
+}
+
+/**
+ * Supply a seed for the random number generator.
+ */
+void seed_random_number_variable(unsigned int seed) {
+  random_number = seed;
+}
+
 /**
  * Initialize all builtin varaibles.
  */
 void init_builtin_variables() {
   create_variable(('t' << 8) | 'i', VAR_FLAG_BUILTIN | VAR_TYPE_INTEGER, builtin_var_time_integer);
   create_variable(('t' << 8) | 'i', VAR_FLAG_BUILTIN | VAR_TYPE_STRING, builtin_var_time_string);
+  create_variable(('r' << 8) | 'n', VAR_FLAG_BUILTIN | VAR_TYPE_INTEGER, builtin_var_random_integer);
 }
 
 /**
