@@ -20,6 +20,7 @@ char loadbuf[40];
 
 typedef void (* command_function) ();
 
+#define CMD_UNKNOWN 0xFF
 #define CMD_GOTO 0
 
 const char const * keywords[] = {
@@ -46,6 +47,22 @@ const char const * keywords[] = {
   "cursor",
   0
 };
+
+void basic_init();
+void interpret(char *s);
+void execute(char *s);
+
+char * skip_whitespace(char *s);
+char * find_args(char *s);
+unsigned char find_keyword(char *s);
+void syntax_error_msg(char *msg);
+void syntax_error();
+char *parse_string(char *s, char **value);
+void parse_string_restore(char *s);
+char *parse_integer(char *s, int *value);
+
+void delete_line(unsigned int line_number);
+void create_line(unsigned int line_number, char *s);
 
 void cmd_goto(char *args);
 void cmd_run(char *args);
@@ -109,115 +126,16 @@ program_line * current_line;
 unsigned char error = 0;
 
 /**
- * Skip any whitespace in the string pointed to by 's'.
- * Returns a pointer to the first non whitespace character.
+ * Initialize the BASIC interpreter.
  */
-char * skip_whitespace(char *s) {
-  while (*s == ' ') {
-    ++s;
-  }
-  return s;
+void basic_init() {
+  init_builtin_variables();
 }
 
-char * find_args(char *s) {
-  char * args = s;
-  while (*args && *args != ' ') {
-    ++args;
-  }
-  if (*args == ' ') {
-    *args = '\0';
-    ++args;
-  }
-  return skip_whitespace(args);
-}
-
-unsigned char find_keyword(char *s) {
-  unsigned char index = 0;
-  while (keywords[index]) {
-    if (strcasecmp(keywords[index], s) == 0) {
-      return index;
-    }
-    ++index;
-  }
-  return 0xff;
-}
-
-void syntax_error_msg(char *msg) {
-  error = 1;
-  if (current_line) {
-    sprintf(print_buffer, "%u: ", current_line->number);
-    lcd_puts(print_buffer);
-  }
-  lcd_puts(msg);
-  lcd_puts("\n");
-}
-
-void syntax_error() {
-  syntax_error_msg("Syntax error!");
-}
-
-void execute(char *s) {
-  unsigned char command;
-  char * args;
-  reset_interrupted();
-  current_line = 0;
-  args = find_args(s);
-  command = find_keyword(s);
-  if (command != 0xff) {
-    command_functions[command](args);
-  } else {
-    lcd_puts("Unknown command!\n");
-  }
-}
-
-void delete_line(unsigned int line_number) {
-  program_line *prev_line = 0;
-  program_line *line = program;
-  while (line) {
-    if (line->number == line_number) {
-      if (prev_line) {
-        prev_line->next = line->next;
-      } else {
-        program = line->next;
-      }
-      free(line->args);
-      free(line);
-      break;
-    }
-    prev_line = line;
-    line = line->next;
-  }
-}
-
-void create_line(unsigned int line_number, char *s) {
-  unsigned char command;
-  char * args;
-  program_line * new_line;
-  args = find_args(s);
-  command = find_keyword(s);
-  if (command != 0xff) {
-    delete_line(line_number);
-    new_line = malloc(sizeof(program_line));
-    new_line->number = line_number;
-    new_line->command = command;
-    new_line->args = malloc(strlen(args) + 1);
-    strcpy(new_line->args, args);
-    if (program && line_number > program->number) {
-      program_line *line = program;
-      while (line->next && line_number > line->next->number) {
-        line = line->next;
-      }
-      new_line->next = line->next;
-      line->next = new_line;
-    } else {
-      new_line->next = program;
-      program = new_line;
-    }
-  } else {
-    lcd_puts("Unknown command!\n");
-  }
-}
-
+/**
+ * Interpret the input buffer 's'. This either executes the BASIC command in 's' or
+ * creates a new program line containing the parsed command in 's'.
+ */
 void interpret(char *s) {
   char * command = s;
   unsigned int line_number;
@@ -243,6 +161,139 @@ void interpret(char *s) {
 }
 
 /**
+ * Execute the BASIC command in 's'.
+ */
+void execute(char *s) {
+  unsigned char command;
+  char * args;
+  reset_interrupted();
+  current_line = 0;
+  args = find_args(s);
+  command = find_keyword(s);
+  if (command != CMD_UNKNOWN) {
+    command_functions[command](args);
+  } else {
+    lcd_puts("Unknown command!\n");
+  }
+}
+
+/**
+ * Skip any whitespace in the string pointed to by 's'.
+ * Returns a pointer to the first non whitespace character.
+ */
+char * skip_whitespace(char *s) {
+  while (*s == ' ') {
+    ++s;
+  }
+  return s;
+}
+
+/**
+ * Find the start of the arguments after the command in 's'.
+ * Side-effect: terminate the command with a '\0'.
+ */
+char * find_args(char *s) {
+  char * args = s;
+  while (*args && *args != ' ') {
+    ++args;
+  }
+  if (*args == ' ') {
+    *args = '\0';
+    ++args;
+  }
+  return skip_whitespace(args);
+}
+
+/**
+ * Find the keyword index of the command string 's'.
+ * Returns CMD_UNKNOWN if no command was found.
+ */
+unsigned char find_keyword(char *s) {
+  unsigned char index = 0;
+  while (keywords[index]) {
+    if (strcasecmp(keywords[index], s) == 0) {
+      return index;
+    }
+    ++index;
+  }
+  return CMD_UNKNOWN;
+}
+
+/**
+ * Print the error message 'msg' and set the error flag.
+ */
+void syntax_error_msg(char *msg) {
+  error = 1;
+  if (current_line) {
+    sprintf(print_buffer, "%u: ", current_line->number);
+    lcd_puts(print_buffer);
+  }
+  lcd_puts(msg);
+  lcd_puts("\n");
+}
+
+/**
+ * Print the standard error message and set the error flag.
+ */
+void syntax_error() {
+  syntax_error_msg("Syntax error!");
+}
+
+/**
+ * Selete the program line with number 'number'.
+ */
+void delete_line(unsigned int number) {
+  program_line *prev_line = 0;
+  program_line *line = program;
+  while (line) {
+    if (line->number == number) {
+      if (prev_line) {
+        prev_line->next = line->next;
+      } else {
+        program = line->next;
+      }
+      free(line->args);
+      free(line);
+      break;
+    }
+    prev_line = line;
+    line = line->next;
+  }
+}
+
+/**
+ * Create a new program line with number 'number' and the command in 's'.
+ */
+void create_line(unsigned int number, char *s) {
+  unsigned char command;
+  char * args;
+  program_line * new_line;
+  args = find_args(s);
+  command = find_keyword(s);
+  if (command != CMD_UNKNOWN) {
+    delete_line(number);
+    new_line = malloc(sizeof(program_line));
+    new_line->number = number;
+    new_line->command = command;
+    new_line->args = malloc(strlen(args) + 1);
+    strcpy(new_line->args, args);
+    if (program && number > program->number) {
+      program_line *line = program;
+      while (line->next && number > line->next->number) {
+        line = line->next;
+      }
+      new_line->next = line->next;
+      line->next = new_line;
+    } else {
+      new_line->next = program;
+      program = new_line;
+    }
+  } else {
+    lcd_puts("Unknown command!\n");
+  }
+}
+
+/**
  * Parse a string argument ("...") at the beginning of the string pointed to by 's'.
  * If a string argument is found, a pointer to its first character is returned in 'value',
  * the terminating '"' character is replaced with '\0' and a pointer begind the string
@@ -262,7 +313,13 @@ char *parse_string(char *s, char **value) {
   return NULL;
 }
 
-#define parse_string_restore(s) *(s + strlen(s)) = '"';
+/**
+ * Restore the '"' character in the string argument 's' (replaces the terminating '\0'
+ * with '"', so it assumes another '\0' after the terminating '\0').
+ */
+void parse_string_restore(char *s) {
+  *(s + strlen(s)) = '"';
+}
 
 /**
  * Parse an integer argument(+-0..9+) in the string pointed to by 's'.
@@ -283,12 +340,9 @@ char *parse_integer(char *s, int *value) {
 }
 
 /**
- * Initialize the BASIC interpreter.
+ * Enable/Disable the LED.
+ * LET ON|OFF
  */
-void basic_init() {
-  init_builtin_variables();
-}
-
 void cmd_led(char *args) {
   if (strcmp("on", args) == 0) {
     led_set(1);
@@ -301,6 +355,7 @@ void cmd_led(char *args) {
 
 /**
  * Print a string constant or a variable value (no newline).
+ * PUT <expression>
  */
 void cmd_put(char *args) {
   if (args[0] == '"') {
@@ -348,6 +403,10 @@ void cmd_print(char *args) {
   }
 }
 
+/**
+ * List the program.
+ * LiST [<from>]
+ */
 void cmd_list(char *args) {
   unsigned char range = 0;
   unsigned int from_number;
@@ -379,6 +438,10 @@ void cmd_list(char *args) {
   lcd_puts("Ready.\n");
 }
 
+/**
+ * Run the program.
+ * RUN
+ */
 void cmd_run(char *) {
   unsigned char command;
   error = 0;
@@ -402,6 +465,10 @@ void cmd_run(char *) {
   lcd_puts("Ready.\n");
 }
 
+/**
+ * Jump to another program line.
+ * GOTO <line>
+ */
 void cmd_goto(char *args) {
   unsigned int line_number;
   program_line *line;
@@ -436,6 +503,10 @@ void cmd_new(char *args) {
   program = 0;
 }
 
+/**
+ * Print the number of free RAM bytes.
+ * FREE
+ */
 void cmd_free(char *) {
   sprintf(print_buffer, "%u bytes free.\n", _heapmemavail());
   lcd_puts(print_buffer);
@@ -530,10 +601,13 @@ void cmd_dir(char *) {
   lcd_puts("Ready.\n");
 }
 
-unsigned long delay;
-unsigned long sleep_end_millis;
-
+/**
+ * Pause the program for some specified amount of time.
+ * SLEEP <milliseconds>
+ */
 void cmd_sleep(char *args) {
+  static unsigned long delay;
+  static unsigned long sleep_end_millis;
   if (isdigit(args[0])) {
     sscanf(args, "%ul", &delay);
     sleep_end_millis = time_millis() + delay;
@@ -547,14 +621,26 @@ void cmd_sleep(char *args) {
   }
 }
 
+/**
+ * Clear the screen.
+ * CLS
+ */
 void cmd_cls(char *) {
   lcd_clear();
 }
 
+/**
+ * Set the cursor to the home position (0,0).
+ * HOME
+ */
 void cmd_home(char *) {
   lcd_home();
 }
 
+/**
+ * Start the synthesizer program.
+ * SYNTH
+ */
 void cmd_synth(char *) {
   lcd_clear();
   lcd_puts("ESC to quit\n");
@@ -592,7 +678,7 @@ void cmd_let(char *args) {
         char *value;
         if (parse_string(args, &value)) {
           create_variable(name, type, value);
-          parse_string_restore(value)
+          parse_string_restore(value);
         } else {
           syntax_error_msg("String expected!");
         }
