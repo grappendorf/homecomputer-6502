@@ -577,21 +577,27 @@ void cmd_put(char *args) {
   int number_value;
   char *string_value;
   unsigned char token;
-  token = next_token(args);
-  if (token == TOKEN_STRING || token == TOKEN_VAR_STRING) {
-    if (parse_string_expression(args, &string_value)) {
-      lcd_puts(string_value);
+  for (;;) {
+    token = next_token(args);
+    if (token == TOKEN_STRING || token == TOKEN_VAR_STRING) {
+      if (args = parse_string_expression(args, &string_value)) {
+        lcd_puts(string_value);
+      }
+    } else if (token == TOKEN_DIGITS || token == TOKEN_PLUS || token == TOKEN_MINUS ||
+               token == TOKEN_VAR_NUMBER) {
+      if (args = parse_number_expression(args, &number_value)) {
+        sprintf(print_buffer, "%d", number_value);
+        lcd_puts(print_buffer);
+      }
+    } else if (token == TOKEN_COMMA) {
+      args = consume_token(args, token);
+    } else if (token == TOKEN_END) {
+      return;
+    } else {
+      syntax_error();
+      return;
     }
-  } else if (token == TOKEN_DIGITS || token == TOKEN_PLUS || token == TOKEN_MINUS ||
-             token == TOKEN_VAR_NUMBER) {
-    if (parse_number_expression(args, &number_value)) {
-      sprintf(print_buffer, "%d", number_value);
-      lcd_puts(print_buffer);
-    }
-  } else {
-    syntax_error();
   }
-  return;
 }
 
 /**
