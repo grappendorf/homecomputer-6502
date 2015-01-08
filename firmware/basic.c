@@ -386,6 +386,8 @@ void cmd_run(char *) {
   while (current_line) {
     if (is_interrupted()) {
       lcd_puts("Interrupted.\n");
+      lcd_cursor_on();
+      lcd_cursor_blink();
       break;
     }
     command = current_line->command;
