@@ -43,6 +43,7 @@ const char const * keywords[] = {
   "vars",
   "input",
   "at",
+  "cursor",
   0
 };
 
@@ -66,6 +67,7 @@ void cmd_clear(char *args);
 void cmd_vars(char *args);
 void cmd_input(char *args);
 void cmd_at(char *args);
+void cmd_cursor(char *args);
 
 const command_function command_functions[] = {
   cmd_goto,
@@ -87,7 +89,8 @@ const command_function command_functions[] = {
   cmd_clear,
   cmd_vars,
   cmd_input,
-  cmd_at
+  cmd_at,
+  cmd_cursor
 };
 
 char print_buffer[41];
@@ -668,4 +671,19 @@ void cmd_at(char *args) {
   }
 
   lcd_goto(x, y);
+}
+
+/**
+ * Enable or disable the cursor.
+ * CURSOR on|off
+ */
+void cmd_cursor(char *args) {
+  if (strcmp("on", args) == 0) {
+    lcd_cursor_on();
+    lcd_cursor_blink();
+  } else if (strcmp("off", args) == 0) {
+    lcd_cursor_off();
+  } else {
+    syntax_error();
+  }
 }
