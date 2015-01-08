@@ -42,6 +42,7 @@ const char const * keywords[] = {
   "clear",
   "vars",
   "input",
+  "at",
   0
 };
 
@@ -64,6 +65,7 @@ void cmd_let(char *args);
 void cmd_clear(char *args);
 void cmd_vars(char *args);
 void cmd_input(char *args);
+void cmd_at(char *args);
 
 const command_function command_functions[] = {
   cmd_goto,
@@ -84,7 +86,8 @@ const command_function command_functions[] = {
   cmd_let,
   cmd_clear,
   cmd_vars,
-  cmd_input
+  cmd_input,
+  cmd_at
 };
 
 char print_buffer[41];
@@ -266,12 +269,12 @@ char *parse_string(char *s, char **value) {
  */
 char *parse_integer(char *s, int *value) {
   if(*s == '+' || *s == '-' || isdigit(*s)) {
-    char *next = s + 1;
-    while (isdigit(*next)) {
-      ++next;
-    }
     sscanf(s, "%d", value);
-    return next;
+    ++s;
+    while (isdigit(*s)) {
+      ++s;
+    }
+    return s;
   }
   return NULL;
 }
@@ -634,4 +637,35 @@ void cmd_input(char *args) {
       syntax_error();
     }
   }
+}
+
+/**
+ * Set the cursor to a specific screen position.
+ * AT <x>,<y>
+ */
+void cmd_at(char *args) {
+  int x;
+  int y;
+
+  args = parse_integer(args, &x);
+  if (! args || x < 0 || x > 39) {
+    syntax_error();
+    return;
+  }
+
+  args = skip_whitespace(args);
+  if (*args != ',') {
+    syntax_error();
+    return;
+  }
+  ++args;
+
+  args = skip_whitespace(args);
+  args = parse_integer(args, &y);
+  if (!args || y < 0 || y > 3) {
+    syntax_error();
+    return;
+  }
+
+  lcd_goto(x, y);
 }
