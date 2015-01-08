@@ -19,11 +19,14 @@ void basic_init();
 void interpret(char *s);
 void execute(char *s);
 
+char *parse_number_expression(char *s, int *value);
+char *parse_number_term(char *s, int *value);
+char *parse_string_expression(char *s, char **value);
 char *parse_string(char *s, char *value);
 char *parse_integer(char *s, int *value);
 char *parse_variable(char *s, unsigned int *name, unsigned char *type);
-char *parse_operator(char *s, unsigned int *operator);
 unsigned char next_token(char *s);
+char *consume_token(char *s, unsigned char token);
 char * skip_whitespace(char *s);
 char * find_args(char *s);
 unsigned char find_keyword(char *s);
@@ -125,11 +128,16 @@ program_line * current_line;
 
 unsigned char error = 0;
 
-#define TOKEN_NUMBER      0
-#define TOKEN_NUMBER_VAR  1
+#define TOKEN_END         0
+#define TOKEN_DIGITS      1
 #define TOKEN_STRING      2
-#define TOKEN_STRING_VAR  3
-#define TOKEN_EQUAL       4
+#define TOKEN_VAR_NUMBER  3
+#define TOKEN_VAR_STRING  4
+#define TOKEN_EQUAL       5
+#define TOKEN_PLUS        6
+#define TOKEN_MINUS       7
+#define TOKEN_MUL         8
+#define TOKEN_DIV         9
 #define TOKEN_INVALID     0xFF;
 
 /**
@@ -191,17 +199,57 @@ void execute(char *s) {
  * Return NULL if a syntax error occurred.
  */
 char *parse_number_expression(char *s, int *value) {
-  unsigned int var_name;
-  variable *var;
-  unsigned char var_type;
+  unsigned char token;
+  int operand;
+  if (s = parse_number_term(s, value)) {
+    while ((token = next_token(s)) != TOKEN_END) {
+      s = consume_token(s, token);
+      switch (token) {
+        case TOKEN_PLUS:
+          if (s = parse_number_term(s, &operand)) {
+            *value += operand;
+          }
+          break;
+        case TOKEN_MINUS:
+          if (s = parse_number_term(s, &operand)) {
+            *value -= operand;
+          }
+          break;
+        case TOKEN_MUL:
+          if (s = parse_number_term(s, &operand)) {
+            *value *= operand;
+          }
+          break;
+        case TOKEN_DIV:
+          if (s = parse_number_term(s, &operand)) {
+            *value /= operand;
+          }
+          break;
+        default:
+          syntax_error();
+          return NULL;
+          break;
+      }
+    }
+    return s;
+  }
+  return NULL;
+}
+
+char *parse_number_term(char *s, int *value) {
+  unsigned char token;
   s = skip_whitespace(s);
-  if (next_token(s) == TOKEN_NUMBER) {
+  token = next_token(s);
+  if (token == TOKEN_DIGITS || token == TOKEN_PLUS || token == TOKEN_MINUS) {
     if (s = parse_integer(s, value)) {
       return s;
     } else {
       syntax_error_invalid_number();
     }
-  } else if (next_token(s) == TOKEN_NUMBER_VAR) {
+  } else if (token == TOKEN_VAR_NUMBER) {
+    unsigned int var_name;
+    unsigned char var_type;
+    variable *var;
     s = parse_variable(s, &var_name, &var_type);
     var = find_variable(var_name, VAR_TYPE_INTEGER, NULL);
     if (var) {
@@ -235,7 +283,7 @@ char *parse_string_expression(char *s, char **value) {
     } else {
       syntax_error_invalid_string();
     }
-  } else if (next_token(s) == TOKEN_STRING_VAR) {
+  } else if (next_token(s) == TOKEN_VAR_STRING) {
     s = parse_variable(s, &var_name, &var_type);
     var = find_variable(var_name, VAR_TYPE_STRING, NULL);
     if (var) {
@@ -319,16 +367,18 @@ char *parse_variable(char *s, unsigned int *name, unsigned char *type) {
 }
 
 /**
- * Parse an operator in the string 's' and return it in 'operator'.
- * Return a pointer behind the operator or NULL if no opetator was found.
- * 'operator' can be NULL if you only want to skip the operator.
+ * Consume the token 'token' in the string 's'.
+ * Return a pointer behind the token.
+ * If the token wasn't found, return NULL with a syntax error.
+ * Currently only implemented for operator tokens.
  */
-char *parse_operator(char *s, unsigned int *operator) {
+char *consume_token(char *s, unsigned char token) {
   s = skip_whitespace(s);
-  if (*s == '=') {
-    if (operator) {
-      *operator = *s;
-    }
+  if ((token == TOKEN_EQUAL && *s == '=') ||
+      (token == TOKEN_PLUS && *s == '+') ||
+      (token == TOKEN_MINUS && *s == '-') ||
+      (token == TOKEN_MUL && *s == '*') ||
+      (token == TOKEN_DIV && *s == '/')) {
     return s + 1;
   }
   return NULL;
@@ -339,19 +389,29 @@ char *parse_operator(char *s, unsigned int *operator) {
  */
 unsigned char next_token(char *s) {
   s = skip_whitespace(s);
-  if(*s == '+' || *s == '-' || isdigit(*s)) {
-    return TOKEN_NUMBER;
+  if(isdigit(*s)){
+    return TOKEN_DIGITS;
   } else if (*s == '"') {
     return TOKEN_STRING;
   } else if (isalpha(*s)) {
     while (isalnum(*s)) { ++s; }
     if (*s == '$') {
-      return TOKEN_STRING_VAR;
+      return TOKEN_VAR_STRING;
     } else {
-      return TOKEN_NUMBER_VAR;
+      return TOKEN_VAR_NUMBER;
     }
   } else if (*s == '=') {
     return TOKEN_EQUAL;
+  } else if (*s == '+') {
+    return TOKEN_PLUS;
+  } else if (*s == '-') {
+    return TOKEN_MINUS;
+  } else if (*s == '*') {
+    return TOKEN_MUL;
+  } else if (*s == '/') {
+    return TOKEN_DIV;
+  } else if (*s == '\0' || *s == ';') {
+    return TOKEN_END;
   }
   return TOKEN_INVALID;
 }
@@ -495,11 +555,12 @@ void cmd_put(char *args) {
   char *string_value;
   unsigned char token;
   token = next_token(args);
-  if (token == TOKEN_STRING || token == TOKEN_STRING_VAR) {
+  if (token == TOKEN_STRING || token == TOKEN_VAR_STRING) {
     if (parse_string_expression(args, &string_value)) {
       lcd_puts(string_value);
     }
-  } else if (token == TOKEN_NUMBER || token == TOKEN_NUMBER_VAR) {
+  } else if (token == TOKEN_DIGITS || token == TOKEN_PLUS || token == TOKEN_MINUS ||
+             token == TOKEN_VAR_NUMBER) {
     if (parse_number_expression(args, &number_value)) {
       sprintf(print_buffer, "%d", number_value);
       lcd_puts(print_buffer);
@@ -783,29 +844,23 @@ void cmd_let(char *args) {
 
   if (args = parse_variable(args, &var_name, &var_type)) {
     if (next_token(args) == TOKEN_EQUAL) {
-      args = parse_operator(args, NULL);
       token = next_token(args);
+      args = consume_token(args, token);
       switch (var_type) {
-        case VAR_TYPE_INTEGER:
-          if (token == TOKEN_NUMBER || token == TOKEN_NUMBER_VAR) {
-            int value;
-            if (parse_number_expression(args, &value)) {
-              create_variable(var_name, var_type, &value);
-            }
-          } else {
-            syntax_error_invalid_number();
+        case VAR_TYPE_INTEGER: {
+          int value;
+          if (parse_number_expression(args, &value)) {
+            create_variable(var_name, var_type, &value);
           }
           break;
-        case VAR_TYPE_STRING:
-          if (token == TOKEN_STRING || token == TOKEN_STRING_VAR) {
-            char *value;
-            if (parse_string_expression(args, &value)) {
-              create_variable(var_name, var_type, value);
-            }
-          } else {
-            syntax_error_invalid_string();
+        }
+        case VAR_TYPE_STRING: {
+          char *value;
+          if (parse_string_expression(args, &value)) {
+            create_variable(var_name, var_type, value);
           }
           break;
+        }
       }
     } else {
       if (*args == '\0') {
