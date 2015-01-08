@@ -6,7 +6,6 @@ extern void interpret(char * s);
 extern void syntax_error();
 extern void syntax_error_msg(char *msg);
 extern char *parse_integer(char *s, int *value);
-extern void cmd_free(char *args);
 extern char print_buffer[];
 
 #endif

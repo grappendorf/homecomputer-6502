@@ -18,6 +18,7 @@
 void basic_init();
 void interpret(char *s);
 void execute(char *s);
+void print_ready();
 
 char *parse_number_expression(char *s, int *value);
 char *parse_number_term(char *s, int *value);
@@ -62,6 +63,8 @@ void cmd_input(char *args);
 void cmd_at(char *args);
 void cmd_cursor(char *args);
 void cmd_seed(char *args);
+void cmd_if(char *args);
+void cmd_end(char *args);
 
 typedef void (* command_function) ();
 
@@ -86,10 +89,12 @@ const command_function command_functions[] = {
   cmd_input,
   cmd_at,
   cmd_cursor,
-  cmd_seed
+  cmd_seed,
+  cmd_if,
+  cmd_end
 };
 
-const char const * keywords[] = {
+const char *keywords[] = {
   "goto",
   "run",
   "led",
@@ -111,11 +116,12 @@ const char const * keywords[] = {
   "at",
   "cursor",
   "seed",
+  "if",
+  "end",
   0
 };
 
 #define CMD_UNKNOWN 0xFF
-#define CMD_GOTO 0
 
 char print_buffer[41];
 char parsebuf[256];
@@ -130,6 +136,8 @@ typedef struct _program_line {
 program_line * program = NULL;
 
 program_line * current_line;
+
+unsigned char current_line_changed;
 
 unsigned char error = 0;
 
@@ -146,6 +154,7 @@ unsigned char error = 0;
 #define TOKEN_MOD         10
 #define TOKEN_COMMA       11
 #define TOKEN_EQUAL       12
+#define TOKEN_THEN        13
 #define TOKEN_INVALID     0xFF;
 
 /**
@@ -163,9 +172,8 @@ void interpret(char *s) {
   char * command = s;
   unsigned int line_number;
 
-  debug_printf1("|%s|\n", s);
-
   error = 0;
+  current_line = 0;
 
   if (strlen(s) == 0) {
     return;
@@ -192,7 +200,7 @@ void execute(char *s) {
   unsigned char command;
   char * args;
   reset_interrupted();
-  current_line = 0;
+  s = skip_whitespace(s);
   args = find_args(s);
   command = find_keyword(s);
   if (command != CMD_UNKNOWN) {
@@ -200,6 +208,13 @@ void execute(char *s) {
   } else {
     lcd_puts("Unknown command!\n");
   }
+}
+
+/**
+ * Print "Ready."
+ */
+void print_ready() {
+  lcd_puts("Ready.\n");
 }
 
 /**
@@ -407,6 +422,9 @@ char *consume_token(char *s, unsigned char token) {
   } else if (token == TOKEN_EQUAL && *s == '=' && *(s + 1) == '=') {
     s += 2;
     return s;
+  } else if (strncmp(s, "then", 4) == 0) {
+    s += 4;
+    return s;
   }
   syntax_error_invalid_token();
   return NULL;
@@ -448,6 +466,8 @@ unsigned char next_token(char *s) {
     return TOKEN_COMMA;
   } else if (*s == '\0' || *s == ';') {
     return TOKEN_END;
+  } else if (strncasecmp(s, "then", 4) == 0) {
+    return TOKEN_THEN;
   }
   return TOKEN_INVALID;
 }
@@ -465,15 +485,10 @@ char *skip_whitespace(char *s) {
 
 /**
  * Find the start of the arguments after the command in 's'.
- * Side-effect: terminate the command with a '\0'.
  */
 char *find_args(char *s) {
   char * args = s;
   while (*args && *args != ' ') {
-    ++args;
-  }
-  if (*args == ' ') {
-    *args = '\0';
     ++args;
   }
   return skip_whitespace(args);
@@ -485,11 +500,13 @@ char *find_args(char *s) {
  */
 unsigned char find_keyword(char *s) {
   unsigned char index = 0;
-  while (keywords[index]) {
-    if (strcasecmp(keywords[index], s) == 0) {
+  const char **keyword = keywords;
+  while (*keyword) {
+    if (strncasecmp(*keyword, s, strlen(*keyword)) == 0) {
       return index;
     }
     ++index;
+    ++keyword;
   }
   return CMD_UNKNOWN;
 }
@@ -655,7 +672,7 @@ void cmd_list(char *args) {
     line = line->next;
   }
 
-  lcd_puts("Ready.\n");
+  print_ready();
 }
 
 /**
@@ -666,6 +683,7 @@ void cmd_run(char *) {
   unsigned char command;
   error = 0;
   current_line = program;
+  current_line_changed = 0;
   while (current_line) {
     if (is_interrupted()) {
       lcd_puts("Interrupted.\n");
@@ -677,11 +695,16 @@ void cmd_run(char *) {
     if (error) {
       break;
     }
-    if (command != CMD_GOTO) {
+    if (current_line_changed) {
+      current_line_changed = 0;
+      if (! current_line) {
+        break;
+      }
+    } else {
       current_line = current_line->next;
     }
   }
-  lcd_puts("Ready.\n");
+  print_ready();
 }
 
 /**
@@ -697,6 +720,7 @@ void cmd_goto(char *args) {
     while (line) {
       if (line->number == line_number) {
         current_line = line;
+        current_line_changed = 1;
         return;
       }
       line = line->next;
@@ -712,7 +736,6 @@ void cmd_goto(char *args) {
  */
 void cmd_new(char *args) {
   program_line * line = program;
-  cmd_clear(args);
   while (line) {
     program_line * next = line->next;
     free(line->args);
@@ -720,6 +743,7 @@ void cmd_new(char *args) {
     line = next;
   }
   program = 0;
+  cmd_clear(args);
 }
 
 /**
@@ -750,7 +774,8 @@ void cmd_save(char *args) {
       lcd_putc('.');
     }
     acia_puts("*EOF\n");
-    lcd_puts("\nReady.\n");
+    lcd_put_newline();
+    print_ready();
   } else {
     syntax_error_invalid_argument();
   }
@@ -783,7 +808,8 @@ void cmd_load(char *args) {
       }
     }
     if (! error) {
-      lcd_puts("\nReady.\n");
+      lcd_put_newline();
+      print_ready();
     }
   } else {
     syntax_error_invalid_argument();
@@ -815,7 +841,7 @@ void cmd_dir(char *) {
       } while (keys_get_code() == KEY_NONE);
     }
   }
-  lcd_puts("Ready.\n");
+  print_ready();
 }
 
 /**
@@ -881,7 +907,7 @@ void cmd_let(char *args) {
 
   if (*args == '\0') {
     print_all_variables();
-    lcd_puts("Ready.\n");
+    print_ready();
     return;
   }
 
@@ -920,6 +946,7 @@ void cmd_let(char *args) {
  */
 void cmd_clear(char *) {
   clear_variables();
+  print_ready();
 }
 
 /**
@@ -991,4 +1018,28 @@ void cmd_seed(char *args) {
   }
 }
 
+/**
+ * Conditional execution of a command.
+ * IF <condition> THEN <command>
+ */
+void cmd_if(char *args) {
+  int condition;
+  if (args = parse_number_expression(args, &condition)) {
+    if (condition) {
+      if (args = consume_token(args, TOKEN_THEN)) {
+        execute(args);
+      }
+    }
+  }
+}
 
+/**
+ * Terminate the program.
+ */
+void cmd_end(char *) {
+  if (! current_line) {
+    print_ready();
+  }
+  current_line = 0;
+  current_line_changed = 1;
+}

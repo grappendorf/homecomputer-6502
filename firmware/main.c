@@ -17,7 +17,8 @@ int main() {
 
   acia_puts("6502 HomeComputer ready.\n");
   lcd_puts("6502 HomeComputer ready!\n");
-  cmd_free(NULL);
+  sprintf(print_buffer, "%u bytes free.\n", _heapmemavail());
+  lcd_puts(print_buffer);
   lcd_puts("Ready.\n");
   lcd_cursor_on();
   lcd_cursor_blink();
