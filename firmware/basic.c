@@ -141,6 +141,7 @@ unsigned char error = 0;
 #define TOKEN_MINUS       7
 #define TOKEN_MUL         8
 #define TOKEN_DIV         9
+#define TOKEN_MOD         10
 #define TOKEN_INVALID     0xFF;
 
 /**
@@ -226,6 +227,11 @@ char *parse_number_expression(char *s, int *value) {
         case TOKEN_DIV:
           if (s = parse_number_term(s, &operand)) {
             *value /= operand;
+          }
+          break;
+        case TOKEN_MOD:
+          if (s = parse_number_term(s, &operand)) {
+            *value %= operand;
           }
           break;
         default:
@@ -381,7 +387,8 @@ char *consume_token(char *s, unsigned char token) {
       (token == TOKEN_PLUS && *s == '+') ||
       (token == TOKEN_MINUS && *s == '-') ||
       (token == TOKEN_MUL && *s == '*') ||
-      (token == TOKEN_DIV && *s == '/')) {
+      (token == TOKEN_DIV && *s == '/') ||
+      (token == TOKEN_MOD && *s == '%')) {
     return s + 1;
   }
   return NULL;
@@ -413,6 +420,8 @@ unsigned char next_token(char *s) {
     return TOKEN_MUL;
   } else if (*s == '/') {
     return TOKEN_DIV;
+  } else if (*s == '%') {
+    return TOKEN_MOD;
   } else if (*s == '\0' || *s == ';') {
     return TOKEN_END;
   }
