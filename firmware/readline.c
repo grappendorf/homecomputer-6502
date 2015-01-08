@@ -33,15 +33,14 @@ char * readline(unsigned char interruptible) {
             lcd_putc(' ');
             lcd_goto(lcd_get_x() - 1, lcd_get_y());
           }
+        } else if (last_char == '\n') {
+          lcd_putc(last_char);
+          *buffer_pos = '\0';
+          break;
         } else if (last_char != 0 && buffer_pos - readline_buffer < 39) {
           lcd_putc(last_char);
-          if (last_char == '\n') {
-            *buffer_pos = '\0';
-            break;
-          } else {
-            *buffer_pos = last_char;
-            ++buffer_pos;
-          }
+          *buffer_pos = last_char;
+          ++buffer_pos;
         }
       }
     } else {
