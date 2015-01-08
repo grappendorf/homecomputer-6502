@@ -138,13 +138,14 @@ unsigned char error = 0;
 #define TOKEN_STRING      2
 #define TOKEN_VAR_NUMBER  3
 #define TOKEN_VAR_STRING  4
-#define TOKEN_EQUAL       5
+#define TOKEN_ASSIGN      5
 #define TOKEN_PLUS        6
 #define TOKEN_MINUS       7
 #define TOKEN_MUL         8
 #define TOKEN_DIV         9
 #define TOKEN_MOD         10
 #define TOKEN_COMMA       11
+#define TOKEN_EQUAL       12
 #define TOKEN_INVALID     0xFF;
 
 /**
@@ -161,6 +162,8 @@ void basic_init() {
 void interpret(char *s) {
   char * command = s;
   unsigned int line_number;
+
+  debug_printf1("|%s|\n", s);
 
   error = 0;
 
@@ -213,33 +216,33 @@ char *parse_number_expression(char *s, int *value) {
       token = next_token(s);
       switch (token) {
         case TOKEN_PLUS:
-          s = consume_token(s, token);
-          if (s = parse_number_term(s, &operand)) {
-            *value += operand;
-          }
-          break;
         case TOKEN_MINUS:
-          s = consume_token(s, token);
-          if (s = parse_number_term(s, &operand)) {
-            *value -= operand;
-          }
-          break;
         case TOKEN_MUL:
-          s = consume_token(s, token);
-          if (s = parse_number_term(s, &operand)) {
-            *value *= operand;
-          }
-          break;
         case TOKEN_DIV:
-          s = consume_token(s, token);
-          if (s = parse_number_term(s, &operand)) {
-            *value /= operand;
-          }
-          break;
         case TOKEN_MOD:
+        case TOKEN_EQUAL:
           s = consume_token(s, token);
           if (s = parse_number_term(s, &operand)) {
-            *value %= operand;
+            switch (token) {
+              case TOKEN_PLUS:
+                *value += operand;
+                break;
+              case TOKEN_MINUS:
+                *value -= operand;
+                break;
+              case TOKEN_MUL:
+                *value *= operand;
+                break;
+              case TOKEN_DIV:
+                *value /= operand;
+                break;
+              case TOKEN_MOD:
+                *value %= operand;
+                break;
+              case TOKEN_EQUAL:
+                *value = *value == operand;
+                break;
+            }
           }
           break;
         default:
@@ -389,7 +392,7 @@ char *parse_variable(char *s, unsigned int *name, unsigned char *type) {
  */
 char *consume_token(char *s, unsigned char token) {
   s = skip_whitespace(s);
-  if ((token == TOKEN_EQUAL && *s == '=') ||
+  if ((token == TOKEN_ASSIGN && *s == '=') ||
       (token == TOKEN_PLUS && *s == '+') ||
       (token == TOKEN_MINUS && *s == '-') ||
       (token == TOKEN_MUL && *s == '*') ||
@@ -397,6 +400,12 @@ char *consume_token(char *s, unsigned char token) {
       (token == TOKEN_MOD && *s == '%') ||
       (token == TOKEN_COMMA && *s == ',')) {
     ++s;
+    return s;
+  } else if (token == TOKEN_ASSIGN && *s == '=' && *s != '=') {
+    ++s;
+    return s;
+  } else if (token == TOKEN_EQUAL && *s == '=' && *(s + 1) == '=') {
+    s += 2;
     return s;
   }
   syntax_error_invalid_token();
@@ -420,7 +429,11 @@ unsigned char next_token(char *s) {
       return TOKEN_VAR_NUMBER;
     }
   } else if (*s == '=') {
-    return TOKEN_EQUAL;
+    ++s;
+    if (*s == '=') {
+      return TOKEN_EQUAL;
+    }
+    return TOKEN_ASSIGN;
   } else if (*s == '+') {
     return TOKEN_PLUS;
   } else if (*s == '-') {
@@ -577,7 +590,7 @@ void cmd_put(char *args) {
   int number_value;
   char *string_value;
   unsigned char token;
-  for (;;) {
+  while (! error) {
     token = next_token(args);
     if (token == TOKEN_STRING || token == TOKEN_VAR_STRING) {
       if (args = parse_string_expression(args, &string_value)) {
@@ -873,7 +886,7 @@ void cmd_let(char *args) {
   }
 
   if (args = parse_variable(args, &var_name, &var_type)) {
-    if (next_token(args) == TOKEN_EQUAL) {
+    if (next_token(args) == TOKEN_ASSIGN) {
       token = next_token(args);
       args = consume_token(args, token);
       switch (var_type) {
