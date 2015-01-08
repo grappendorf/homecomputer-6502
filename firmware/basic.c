@@ -717,11 +717,12 @@ void cmd_free(char *) {
  * SAVE "<filename>"
  */
 void cmd_save(char *args) {
-  if (parse_string(args, parsebuf)) {
+  char *filename;
+  if (parse_string_expression(args, &filename)) {
     program_line *line = program;
     lcd_puts("Saving...");
     acia_puts("*SAVE \"");
-    acia_puts(parsebuf);
+    acia_puts(filename);
     acia_puts("\"\n");
     while (line) {
       sprintf(print_buffer, "%u %s %s\n", line->number, keywords[line->command], line->args);
@@ -741,11 +742,12 @@ void cmd_save(char *args) {
  * LOAD "<filename>"
  */
 void cmd_load(char *args) {
-  if (parse_string(args, parsebuf)) {
+  char *filename;
+  if (parse_string_expression(args, &filename)) {
     cmd_new(0);
     lcd_puts("Loading...");
     acia_puts("*LOAD \"");
-    acia_puts(parsebuf);
+    acia_puts(filename);
     acia_puts("\"\n");
     for(;;) {
       acia_puts("*NEXT\n");
