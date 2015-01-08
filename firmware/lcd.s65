@@ -22,21 +22,21 @@
                     CMD_RETURNHOME     = $02
                     CMD_ENTRYMODESET   = $04
                     CMD_DISPLAYCONTROL = $08
-                    CMD_lcd_cursorSHIFT    = $10
+                    CMD_CURSORSHIFT    = $10
                     CMD_FUNCTIONSET    = $20
                     CMD_SETCGRAMADDR   = $40
                     CMD_SETDDRAMADDR   = $80
 
-                    CTRL_lcd_cursor_DEC    = $00
-                    CTRL_lcd_cursor_INC    = $02
+                    CTRL_CURSOR_DEC    = $00
+                    CTRL_CURSOR_INC    = $02
                     CTRL_DISPLAY_FIXED = $00
                     CTRL_DISPLAY_MOVE  = $01
                     CTRL_DISPLAY_OFF   = $00
                     CTRL_DISPLAY_ON    = $04
-                    CTRL_lcd_cursor_OFF    = $00
-                    CTRL_lcd_cursor_ON     = $02
-                    CTRL_lcd_cursor_BLINK  = $01
-                    CTRL_SHIFT_lcd_cursor  = $00
+                    CTRL_CURSOR_OFF    = $00
+                    CTRL_CURSOR_ON     = $02
+                    CTRL_CURSOR_BLINK  = $01
+                    CTRL_SHIFT_CURSOR  = $00
                     CTRL_SHIFT_DISPLAY = $08
                     CTRL_SHIFT_LEFT    = $00
                     CTRL_SHIFT_RIGHT   = $04
@@ -104,9 +104,9 @@ _lcd_init:          phaxy
                     jsr command
                     lda #(CMD_DISPLAYCONTROL | CTRL_DISPLAY_OFF)
                     jsr command
-                    lda #(CMD_DISPLAYCONTROL | CTRL_DISPLAY_ON | CTRL_lcd_cursor_OFF)
+                    lda #(CMD_DISPLAYCONTROL | CTRL_DISPLAY_ON | CTRL_CURSOR_OFF)
                     jsr command
-                    lda #(CMD_ENTRYMODESET | CTRL_lcd_cursor_INC | CTRL_DISPLAY_FIXED)
+                    lda #(CMD_ENTRYMODESET | CTRL_CURSOR_INC | CTRL_DISPLAY_FIXED)
                     jsr command
                     lda #CMD_CLEARDISPLAY
                     jsr command
@@ -299,7 +299,7 @@ _lcd_put_newline:   pha
 goto:               phaxy
                     stx lcd_column
                     sty lcd_row
-                    lda #(CMD_DISPLAYCONTROL | CTRL_DISPLAY_ON | CTRL_lcd_cursor_OFF)
+                    lda #(CMD_DISPLAYCONTROL | CTRL_DISPLAY_ON | CTRL_CURSOR_OFF)
                     jsr command
                     ldy lcd_row
                     lda row_enables,y
@@ -351,7 +351,7 @@ _lcd_clear:         phaxy
 ; void lcd_cursor_on()
 ; Show the cursor
 _lcd_cursor_on:     phaxy
-                    lda #CTRL_lcd_cursor_ON
+                    lda #CTRL_CURSOR_ON
                     sta lcd_cursor
                     ora #(CMD_DISPLAYCONTROL| CTRL_DISPLAY_ON)
                     jsr command
@@ -361,7 +361,7 @@ _lcd_cursor_on:     phaxy
 ; void lcd_cursor_blink()
 ; Show a blinking cursor
 _lcd_cursor_blink:  phaxy
-                    lda #(CTRL_lcd_cursor_ON | CTRL_lcd_cursor_BLINK)
+                    lda #(CTRL_CURSOR_ON | CTRL_CURSOR_BLINK)
                     sta lcd_cursor
                     ora #(CMD_DISPLAYCONTROL| CTRL_DISPLAY_ON)
                     jsr command
@@ -371,7 +371,7 @@ _lcd_cursor_blink:  phaxy
 ; lcd_cursor_off()
 ; Hide the cursor
 _lcd_cursor_off:    phaxy
-                    lda #CTRL_lcd_cursor_OFF
+                    lda #CTRL_CURSOR_OFF
                     sta lcd_cursor
                     ora #(CMD_DISPLAYCONTROL| CTRL_DISPLAY_ON)
                     jsr command
