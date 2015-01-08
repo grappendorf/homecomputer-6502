@@ -33,8 +33,10 @@ unsigned char find_keyword(char *s);
 
 void syntax_error_msg(char *msg);
 void syntax_error();
+#define syntax_error_invalid_token() syntax_error_msg("Invalid token!")
 #define syntax_error_invalid_string() syntax_error_msg("Invalid string expression!")
 #define syntax_error_invalid_number() syntax_error_msg("Invalid number expression!")
+#define syntax_error_invalid_argument() syntax_error_msg("Invalid argument!")
 
 void delete_line(unsigned int line_number);
 void create_line(unsigned int line_number, char *s);
@@ -142,6 +144,7 @@ unsigned char error = 0;
 #define TOKEN_MUL         8
 #define TOKEN_DIV         9
 #define TOKEN_MOD         10
+#define TOKEN_COMMA       11
 #define TOKEN_INVALID     0xFF;
 
 /**
@@ -206,38 +209,41 @@ char *parse_number_expression(char *s, int *value) {
   unsigned char token;
   int operand;
   if (s = parse_number_term(s, value)) {
-    while ((token = next_token(s)) != TOKEN_END) {
-      s = consume_token(s, token);
+    for (;;) {
+      token = next_token(s);
       switch (token) {
         case TOKEN_PLUS:
+          s = consume_token(s, token);
           if (s = parse_number_term(s, &operand)) {
             *value += operand;
           }
           break;
         case TOKEN_MINUS:
+          s = consume_token(s, token);
           if (s = parse_number_term(s, &operand)) {
             *value -= operand;
           }
           break;
         case TOKEN_MUL:
+          s = consume_token(s, token);
           if (s = parse_number_term(s, &operand)) {
             *value *= operand;
           }
           break;
         case TOKEN_DIV:
+          s = consume_token(s, token);
           if (s = parse_number_term(s, &operand)) {
             *value /= operand;
           }
           break;
         case TOKEN_MOD:
+          s = consume_token(s, token);
           if (s = parse_number_term(s, &operand)) {
             *value %= operand;
           }
           break;
         default:
-          syntax_error();
-          return NULL;
-          break;
+          return s;
       }
     }
     return s;
@@ -388,9 +394,12 @@ char *consume_token(char *s, unsigned char token) {
       (token == TOKEN_MINUS && *s == '-') ||
       (token == TOKEN_MUL && *s == '*') ||
       (token == TOKEN_DIV && *s == '/') ||
-      (token == TOKEN_MOD && *s == '%')) {
-    return s + 1;
+      (token == TOKEN_MOD && *s == '%') ||
+      (token == TOKEN_COMMA && *s == ',')) {
+    ++s;
+    return s;
   }
+  syntax_error_invalid_token();
   return NULL;
 }
 
@@ -422,6 +431,8 @@ unsigned char next_token(char *s) {
     return TOKEN_DIV;
   } else if (*s == '%') {
     return TOKEN_MOD;
+  } else if (*s == ',') {
+    return TOKEN_COMMA;
   } else if (*s == '\0' || *s == ';') {
     return TOKEN_END;
   }
@@ -639,7 +650,6 @@ void cmd_run(char *) {
   while (current_line) {
     if (is_interrupted()) {
       lcd_puts("Interrupted.\n");
-      lcd_cursor_on();
       lcd_cursor_blink();
       break;
     }
@@ -722,7 +732,7 @@ void cmd_save(char *args) {
     acia_puts("*EOF\n");
     lcd_puts("\nReady.\n");
   } else {
-    syntax_error_msg("String expected!");
+    syntax_error_invalid_argument();
   }
 }
 
@@ -755,7 +765,7 @@ void cmd_load(char *args) {
       lcd_puts("\nReady.\n");
     }
   } else {
-    syntax_error_msg("String expected!");
+    syntax_error_invalid_argument();
   }
 }
 
@@ -918,27 +928,20 @@ void cmd_input(char *args) {
 void cmd_at(char *args) {
   int x;
   int y;
-
-  args = parse_integer(args, &x);
-  if (! args || x < 0 || x > 39) {
-    syntax_error();
+  args = parse_number_expression(args, &x);
+  if (!args || x < 0 || x > 39) {
+    syntax_error_invalid_argument();
     return;
   }
-
-  args = skip_whitespace(args);
-  if (*args != ',') {
-    syntax_error();
+  args = consume_token(args, TOKEN_COMMA);
+  if (! args) {
     return;
   }
-  ++args;
-
-  args = skip_whitespace(args);
-  args = parse_integer(args, &y);
+  args = parse_number_expression(args, &y);
   if (!args || y < 0 || y > 3) {
     syntax_error();
     return;
   }
-
   lcd_goto(x, y);
 }
 
@@ -948,7 +951,6 @@ void cmd_at(char *args) {
  */
 void cmd_cursor(char *args) {
   if (strcmp("on", args) == 0) {
-    lcd_cursor_on();
     lcd_cursor_blink();
   } else if (strcmp("off", args) == 0) {
     lcd_cursor_off();
