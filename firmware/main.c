@@ -13,10 +13,12 @@ int main() {
   lcd_init();
   led_init();
   keys_init();
+  basic_init();
 
   acia_puts("6502 HomeComputer ready.\n");
   lcd_puts("6502 HomeComputer ready!\n");
   cmd_free(NULL);
+  lcd_puts("Ready.\n");
   lcd_cursor_on();
   lcd_cursor_blink();
 

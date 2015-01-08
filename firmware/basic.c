@@ -23,8 +23,6 @@ typedef void (* command_function) ();
 const char const * keywords[] = {
   "goto",
   "run",
-  "time",
-  "uptime",
   "led",
   "print",
   "put",
@@ -47,8 +45,6 @@ const char const * keywords[] = {
 
 void cmd_goto(char *args);
 void cmd_run(char *args);
-void cmd_print_time(char *args);
-void cmd_print_uptime(char *args);
 void cmd_led(char *args);
 void cmd_print(char *args);
 void cmd_put(char *args);
@@ -70,8 +66,6 @@ void cmd_input(char *args);
 const command_function command_functions[] = {
   cmd_goto,
   cmd_run,
-  cmd_print_time,
-  cmd_print_uptime,
   cmd_led,
   cmd_print,
   cmd_put,
@@ -106,8 +100,10 @@ program_line * current_line;
 
 unsigned char error = 0;
 
-#define VAR_TYPE_INTEGER 0
-#define VAR_TYPE_STRING 1
+#define VAR_TYPE_INTEGER          0
+#define VAR_TYPE_STRING           1
+#define VAR_FLAG_BUILTIN          0x80
+#define VAR_TYPE_MASK             0x0f
 
 #define VAR_PRINT_VALUE   0
 #define VAR_PRINT_VERBOSE 1
@@ -118,6 +114,8 @@ typedef struct _variable {
   union {
     int integer;
     char *string;
+    int *(* builtin_integer) ();
+    char *(* builtin_string) ();
   } value;
   struct _variable *next;
 } variable;
@@ -303,12 +301,13 @@ char *parse_integer(char *s, int *value) {
  * Returns NULL if the variable wasn't found.
  * Returns a pointer to the previous variable in prev if prev != NULL.
  */
-variable * find_variable(unsigned int name, variable **prev) {
+variable * find_variable(unsigned int name, unsigned char type, variable **prev) {
   variable *v = variables;
   if (prev) {
     *prev = NULL;
   }
-  while (v && v->name != name) {
+  while (v && (v->name != name ||
+         (v->type & VAR_TYPE_MASK) != (type & VAR_TYPE_MASK))) {
     if (prev) {
       *prev = v;
     }
@@ -321,12 +320,18 @@ variable * find_variable(unsigned int name, variable **prev) {
  * Create a new variable with name name, type type and value value.
  * Override the variable if it is already defined.
  */
-void create_variable(unsigned int name, unsigned char type, char *value) {
+void create_variable(unsigned int name, unsigned char type, void *value) {
   variable *new_v;
   variable *prev_v;
-  variable *v = find_variable(name, &prev_v);
+  variable *v = find_variable(name, type, &prev_v);
+
+  if (v && v->type & VAR_FLAG_BUILTIN) {
+    syntax_error_msg("Cannot overwrite builtin!");
+    return;
+  }
+
   if (v) {
-    if (v->type == VAR_TYPE_STRING) {
+    if ((v->type & VAR_TYPE_MASK) == VAR_TYPE_STRING) {
       free(v->value.string);
     }
     new_v = v;
@@ -336,34 +341,49 @@ void create_variable(unsigned int name, unsigned char type, char *value) {
     new_v->next = variables;
     variables = new_v;
   }
+
   new_v->type = type;
-  switch (type) {
+  switch (type & VAR_TYPE_MASK) {
     case VAR_TYPE_INTEGER: {
-      int integer;
-      if (parse_integer(value, &integer)) {
-        new_v->value.integer = integer;
+      if (type & VAR_FLAG_BUILTIN) {
+        new_v->value.builtin_string = value;
       } else {
-        syntax_error();
+        int integer;
+        if (parse_integer(value, &integer)) {
+          new_v->value.integer = integer;
+        } else {
+          syntax_error();
+        }
       }
       break;
     }
     case VAR_TYPE_STRING: {
-      unsigned char len = strlen(value);
-      new_v->value.string = malloc(len + 1);
-      strcpy(new_v->value.string, value);
+      if (type & VAR_FLAG_BUILTIN) {
+        new_v->value.builtin_string = value;
+      } else {
+        unsigned char len = strlen(value);
+        new_v->value.string = malloc(len + 1);
+        strcpy(new_v->value.string, value);
+      }
       break;
     }
   }
 }
 
 /**
- * Delete the variable with the name name.
+ * Delete the variable with the name 'name' and the type 'type'.
  */
-void delete_variable(unsigned int name) {
+void delete_variable(unsigned int name, unsigned char type) {
   variable *prev_v;
-  variable *v = find_variable(name, &prev_v);
+  variable *v = find_variable(name, type, &prev_v);
+
+  if (v && v->type & VAR_FLAG_BUILTIN) {
+    syntax_error_msg("Cannot delete builtin!");
+    return;
+  }
+
   if (v) {
-    if (v->type == VAR_TYPE_STRING) {
+    if ((v->type & VAR_TYPE_MASK) == VAR_TYPE_STRING) {
       free(v->value.string);
     }
     if (v == variables) {
@@ -381,16 +401,24 @@ void delete_variable(unsigned int name) {
  * (e.g. "..." for strings).
  */
 void print_variable(variable *v, unsigned char mode) {
-  switch (v->type) {
+  switch (v->type & VAR_TYPE_MASK) {
     case VAR_TYPE_INTEGER:
-      sprintf(print_buffer, "%d", v->value.integer);
+      if (v->type & VAR_FLAG_BUILTIN) {
+        sprintf(print_buffer, "%d", v->value.builtin_integer());
+      } else {
+        sprintf(print_buffer, "%d", v->value.integer);
+      }
       lcd_puts(print_buffer);
       break;
     case VAR_TYPE_STRING:
       if (mode == VAR_PRINT_VERBOSE) {
         lcd_putc('"');
       }
-      lcd_puts(v->value.string);
+      if (v->type & VAR_FLAG_BUILTIN) {
+        lcd_puts(v->value.builtin_string());
+      } else {
+        lcd_puts(v->value.string);
+      }
       if (mode == VAR_PRINT_VERBOSE) {
         lcd_putc('"');
       }
@@ -399,19 +427,34 @@ void print_variable(variable *v, unsigned char mode) {
 }
 
 /**
- * Print the current time (without newline).
+ * Return the value of the builtin ti$ variable ("00:00:00").
  */
-void cmd_print_time(char *) {
-  sprintf(print_buffer, "%02d:%02d:%02d", time_hours(), time_minutes(), time_seconds());
-  lcd_puts(print_buffer);
+char *builtin_var_time_string() {
+  static char builtin_var_time_buffer[9]; // "00:00:00"
+  sprintf(builtin_var_time_buffer, "%02d:%02d:%02d", time_hours(), time_minutes(), time_seconds());
+  return builtin_var_time_buffer;
 }
 
 /**
- * Print the current time in milliseconds (without newline).
+ * Return the value of the builtin ti variable (time in milliseconds).
  */
-void cmd_print_uptime(char *) {
-  sprintf(print_buffer, "%ld", time_millis());
-  lcd_puts(print_buffer);
+int builtin_var_time_integer() {
+  return time_millis();
+}
+
+/**
+ * Initialize all builtin varaibles.
+ */
+void init_builtin_variables() {
+  create_variable(('t' << 8) | 'i', VAR_FLAG_BUILTIN | VAR_TYPE_INTEGER, builtin_var_time_integer);
+  create_variable(('t' << 8) | 'i', VAR_FLAG_BUILTIN | VAR_TYPE_STRING, builtin_var_time_string);
+}
+
+/**
+ * Initialize the BASIC interpreter.
+ */
+void basic_init() {
+  init_builtin_variables();
 }
 
 void cmd_led(char *args) {
@@ -438,18 +481,23 @@ void cmd_put(char *args) {
       syntax_error_malformed_string();
     }
   } else if (isalpha(*args)) {
+    unsigned char type = VAR_TYPE_INTEGER;
     variable *v;
     unsigned int name = *args;
     ++args;
     if (isalnum(*args)) {
-      name << 8;
+      name <<= 8;
       name |= *args;
+      ++args;
     }
-    v = find_variable(name, NULL);
+    if (*args == '$') {
+      type = VAR_TYPE_STRING;
+    }
+    v = find_variable(name, type, NULL);
     if (v) {
       print_variable(v, VAR_PRINT_VALUE);
     } else {
-      syntax_error_msg("Variable to found!");
+      syntax_error_msg("Variable not found!");
     }
   } else if (*args == 0) {
     // Print nothing
@@ -496,7 +544,7 @@ void cmd_list(char *args) {
     line = line->next;
   }
 
-  lcd_puts("Ok.\n");
+  lcd_puts("Ready.\n");
 }
 
 void cmd_run(char *) {
@@ -517,6 +565,7 @@ void cmd_run(char *) {
       current_line = current_line->next;
     }
   }
+  lcd_puts("Ready.\n");
 }
 
 void cmd_goto(char *args) {
@@ -578,7 +627,7 @@ void cmd_save(char *args) {
       lcd_putc('.');
     }
     acia_puts("*EOF\n");
-    lcd_puts("\nOk.\n");
+    lcd_puts("\nReady.\n");
   } else {
     syntax_error_msg("String expected!");
   }
@@ -612,7 +661,7 @@ void cmd_load(char *args) {
       }
     }
     if (! error) {
-      lcd_puts("\nOk.\n");
+      lcd_puts("\nReady.\n");
     }
   } else {
     syntax_error_msg("String expected!");
@@ -644,7 +693,7 @@ void cmd_dir(char *) {
       } while (keys_get_code() == KEY_NONE);
     }
   }
-  lcd_puts("Ok.\n");
+  lcd_puts("Ready.\n");
 }
 
 unsigned long delay;
@@ -688,6 +737,7 @@ void cmd_synth(char *) {
 void cmd_let(char *args) {
   unsigned char type = VAR_TYPE_INTEGER;
   unsigned int name;
+
   if (isalpha(*args)) {
     name = *args;
     ++args;
@@ -700,6 +750,7 @@ void cmd_let(char *args) {
       type = VAR_TYPE_STRING;
       ++args;
     }
+
     args = skip_whitespace(args);
     if (*args == '=') {
       args = skip_whitespace(args + 1);
@@ -715,7 +766,7 @@ void cmd_let(char *args) {
         create_variable(name, type, args);
       }
     } else if (*args == '\0') {
-      delete_variable(name);
+      delete_variable(name, type);
     } else {
       syntax_error();
     }
@@ -739,6 +790,7 @@ void cmd_clear(char *) {
     free(delete_v);
   }
   variables = NULL;
+  init_builtin_variables();
 }
 
 /**
@@ -757,8 +809,16 @@ void cmd_vars(char *) {
     lcd_puts(" = ");
     print_variable(v, VAR_PRINT_VERBOSE);
     lcd_put_newline();
+    do {
+      if (is_interrupted()) {
+        lcd_puts("Interrupted.\n");
+        return;
+      }
+      keys_update();
+    } while (keys_get_code() == KEY_NONE);
     v = v->next;
   }
+  lcd_puts("Ready.\n");
 }
 
 /**
