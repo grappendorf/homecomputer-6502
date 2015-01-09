@@ -141,21 +141,26 @@ unsigned char current_line_changed;
 
 unsigned char error = 0;
 
-#define TOKEN_END         0
-#define TOKEN_DIGITS      1
-#define TOKEN_STRING      2
-#define TOKEN_VAR_NUMBER  3
-#define TOKEN_VAR_STRING  4
-#define TOKEN_ASSIGN      5
-#define TOKEN_PLUS        6
-#define TOKEN_MINUS       7
-#define TOKEN_MUL         8
-#define TOKEN_DIV         9
-#define TOKEN_MOD         10
-#define TOKEN_COMMA       11
-#define TOKEN_EQUAL       12
-#define TOKEN_THEN        13
-#define TOKEN_INVALID     0xFF;
+#define TOKEN_END           0
+#define TOKEN_DIGITS        1
+#define TOKEN_STRING        2
+#define TOKEN_VAR_NUMBER    3
+#define TOKEN_VAR_STRING    4
+#define TOKEN_ASSIGN        5
+#define TOKEN_PLUS          6
+#define TOKEN_MINUS         7
+#define TOKEN_MUL           8
+#define TOKEN_DIV           9
+#define TOKEN_MOD           10
+#define TOKEN_COMMA         11
+#define TOKEN_EQUAL         12
+#define TOKEN_NOTEQUAL      13
+#define TOKEN_LESS          14
+#define TOKEN_LESSEQUAL     15
+#define TOKEN_GREATER       16
+#define TOKEN_GREATEREQUAL  17
+#define TOKEN_THEN          18
+#define TOKEN_INVALID       0xFF;
 
 /**
  * Initialize the BASIC interpreter.
@@ -236,6 +241,10 @@ char *parse_number_expression(char *s, int *value) {
         case TOKEN_DIV:
         case TOKEN_MOD:
         case TOKEN_EQUAL:
+        case TOKEN_LESS:
+        case TOKEN_LESSEQUAL:
+        case TOKEN_GREATER:
+        case TOKEN_GREATEREQUAL:
           s = consume_token(s, token);
           if (s = parse_number_term(s, &operand)) {
             switch (token) {
@@ -256,6 +265,21 @@ char *parse_number_expression(char *s, int *value) {
                 break;
               case TOKEN_EQUAL:
                 *value = *value == operand;
+                break;
+              case TOKEN_NOTEQUAL:
+                *value = *value != operand;
+                break;
+              case TOKEN_LESS:
+                *value = *value < operand;
+                break;
+              case TOKEN_LESSEQUAL:
+                *value = *value <= operand;
+                break;
+              case TOKEN_GREATER:
+                *value = *value > operand;
+                break;
+              case TOKEN_GREATEREQUAL:
+                *value = *value >= operand;
                 break;
             }
           }
@@ -414,17 +438,21 @@ char *consume_token(char *s, unsigned char token) {
       (token == TOKEN_DIV && *s == '/') ||
       (token == TOKEN_MOD && *s == '%') ||
       (token == TOKEN_COMMA && *s == ',')) {
-    ++s;
-    return s;
-  } else if (token == TOKEN_ASSIGN && *s == '=' && *s != '=') {
-    ++s;
-    return s;
+    return s + 1;
+  } else if (token == TOKEN_ASSIGN && *s == '=' && *(s + 1) != '=') {
+    return s + 1;
   } else if (token == TOKEN_EQUAL && *s == '=' && *(s + 1) == '=') {
-    s += 2;
-    return s;
+    return s + 2;
+  } else if (token == TOKEN_LESS && *s == '<' && *(s + 1) != '=') {
+    return s + 1;
+  } else if (token == TOKEN_LESSEQUAL && *s == '<' && *(s + 1) == '=') {
+    return s + 2;
+  } else if (token == TOKEN_GREATER && *s == '>' && *(s + 1) != '=') {
+    return s + 1;
+  } else if (token == TOKEN_GREATEREQUAL && *s == '>' && *(s + 1) == '=') {
+    return s + 2;
   } else if (strncmp(s, "then", 4) == 0) {
-    s += 4;
-    return s;
+    return s + 4;
   }
   syntax_error_invalid_token();
   return NULL;
@@ -452,6 +480,18 @@ unsigned char next_token(char *s) {
       return TOKEN_EQUAL;
     }
     return TOKEN_ASSIGN;
+  } else if (*s == '<') {
+    ++s;
+    if (*s == '=') {
+      return TOKEN_LESSEQUAL;
+    }
+    return TOKEN_LESS;
+  } else if (*s == '>') {
+    ++s;
+    if (*s == '=') {
+      return TOKEN_GREATEREQUAL;
+    }
+    return TOKEN_GREATER;
   } else if (*s == '+') {
     return TOKEN_PLUS;
   } else if (*s == '-') {
