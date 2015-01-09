@@ -200,8 +200,21 @@ void clear_variables() {
  * List all variables.
  */
 void print_all_variables() {
+  unsigned char first = 1;
   variable *v = variables;
   while (v) {
+    if (first) {
+      first = 0;
+    } else {
+      do {
+        if (is_interrupted()) {
+          lcd_puts("Interrupted.\n");
+          return;
+        }
+        keys_update();
+      } while (keys_get_code() == KEY_NONE);
+    }
+
     if (v->name > 256) {
       lcd_putc(v->name >> 8);
     }
@@ -209,16 +222,12 @@ void print_all_variables() {
     if (v->type == VAR_TYPE_STRING) {
       lcd_putc('$');
     }
+
     lcd_puts(" = ");
+
     print_variable(v, VAR_PRINT_VERBOSE);
     lcd_put_newline();
-    do {
-      if (is_interrupted()) {
-        lcd_puts("Interrupted.\n");
-        return;
-      }
-      keys_update();
-    } while (keys_get_code() == KEY_NONE);
+
     v = v->next;
   }
  }

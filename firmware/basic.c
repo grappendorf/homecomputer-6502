@@ -649,6 +649,7 @@ void cmd_list(char *args) {
   unsigned int from_number;
   unsigned int to_number;
   program_line *line;
+  unsigned char first = 1;
 
   if (isdigit(args[0])) {
     sscanf(args, "%u", &from_number);
@@ -659,15 +660,19 @@ void cmd_list(char *args) {
   line = program;
   while (line) {
     if (range == 0 || (line->number >= from_number && line->number <= to_number)) {
+      if (first) {
+        first = 0;
+      } else {
+        do {
+          if (is_interrupted()) {
+            lcd_puts("Interrupted.\n");
+            return;
+          }
+          keys_update();
+        } while (keys_get_code() == KEY_NONE);
+      }
       sprintf(print_buffer, "%u %s %s\n", line->number, keywords[line->command], line->args);
       lcd_puts(print_buffer);
-      do {
-        if (is_interrupted()) {
-          lcd_puts("Interrupted.\n");
-          return;
-        }
-        keys_update();
-      } while (keys_get_code() == KEY_NONE);
     }
     line = line->next;
   }
@@ -821,24 +826,32 @@ void cmd_load(char *args) {
  * DIR
  */
 void cmd_dir(char *) {
+  unsigned char first = 1;
+
   acia_puts("*DIR\n");
+
   for(;;) {
     acia_puts("*NEXT\n");
     acia_gets(readline_buffer, 255);
+
     if (strncmp("*EOF", readline_buffer, 4) == 0) {
       break;
     } else {
-      lcd_puts(readline_buffer);
+      if (first) {
+        first = 0;
+      } else {
+        do {
+          if (is_interrupted()) {
+            acia_puts("*BREAK\n");
+            lcd_puts("Interrupted.\n");
+            return;
+          }
+          keys_update();
+        } while (keys_get_code() == KEY_NONE);
+      }
 
+      lcd_puts(readline_buffer);
       lcd_put_newline();
-      do {
-        if (is_interrupted()) {
-          acia_puts("*BREAK\n");
-          lcd_puts("Interrupted.\n");
-          return;
-        }
-        keys_update();
-      } while (keys_get_code() == KEY_NONE);
     }
   }
   print_ready();
