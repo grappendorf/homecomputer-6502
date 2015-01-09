@@ -966,19 +966,23 @@ void cmd_clear(char *) {
  * Input a variable from the keyboard.
  */
 void cmd_input(char *args) {
-  if (isalpha(*args)) {
-    unsigned int name = *args;
-    ++args;
-    if (isalnum(*args)) {
-      name <<= 8;
-      name |= *args;
-    }
-    if (*args == '$') {
-      char *line = readline(INTERRUPTIBLE);
-      create_variable(name, VAR_TYPE_STRING, line);
+  unsigned int var_name;
+  unsigned char var_type;
+  args = parse_variable(args, &var_name, &var_type);
+  if (args) {
+    char *line = readline(INTERRUPTIBLE);
+    if (var_type == VAR_TYPE_STRING) {
+      create_variable(var_name, var_type, line);
+    } else if (var_type == VAR_TYPE_INTEGER) {
+      int value = 0;
+      if (parse_integer(line, &value)) {
+        create_variable(var_name, var_type, &value);
+      }
     } else {
-      syntax_error();
+      syntax_error_invalid_argument();
     }
+  } else {
+    syntax_error_invalid_argument();
   }
 }
 
