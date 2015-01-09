@@ -3,7 +3,8 @@
 #include "readline.h"
 #include "interrupt.h"
 
-char readline_buffer[256];
+#define MAX_CHARS 79
+char readline_buffer[MAX_CHARS + 1];
 char *buffer_pos;
 unsigned char last_key = KEY_NONE;
 char last_char = 0;
@@ -29,15 +30,21 @@ char * readline(unsigned char interruptible) {
         if ((last_key) == KEY_BACKSPACE) {
           if (buffer_pos != readline_buffer) {
             --buffer_pos;
-            lcd_goto(lcd_get_x() - 1, lcd_get_y());
-            lcd_putc(' ');
-            lcd_goto(lcd_get_x() - 1, lcd_get_y());
+            if (lcd_get_x() == 0) {
+              lcd_goto(39, lcd_get_y() - 1);
+              lcd_putc(' ');
+              lcd_goto(39, lcd_get_y() - 1);
+            } else {
+              lcd_goto(lcd_get_x() - 1, lcd_get_y());
+              lcd_putc(' ');
+              lcd_goto(lcd_get_x() - 1, lcd_get_y());
+            }
           }
         } else if (last_char == '\n') {
           lcd_putc(last_char);
           *buffer_pos = '\0';
           break;
-        } else if (last_char != 0 && buffer_pos - readline_buffer < 39) {
+        } else if (last_char != 0 && buffer_pos - readline_buffer < MAX_CHARS) {
           lcd_putc(last_char);
           *buffer_pos = last_char;
           ++buffer_pos;
