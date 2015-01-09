@@ -65,6 +65,7 @@ void cmd_cursor(char *args);
 void cmd_seed(char *args);
 void cmd_if(char *args);
 void cmd_end(char *args);
+void cmd_edit(char *args);
 
 typedef void (* command_function) ();
 
@@ -91,7 +92,8 @@ const command_function command_functions[] = {
   cmd_cursor,
   cmd_seed,
   cmd_if,
-  cmd_end
+  cmd_end,
+  cmd_edit
 };
 
 const char *keywords[] = {
@@ -118,6 +120,7 @@ const char *keywords[] = {
   "seed",
   "if",
   "end",
+  "edit",
   0
 };
 
@@ -1092,6 +1095,7 @@ void cmd_if(char *args) {
 
 /**
  * Terminate the program.
+ * END
  */
 void cmd_end(char *) {
   if (! current_line) {
@@ -1099,4 +1103,28 @@ void cmd_end(char *) {
   }
   current_line = 0;
   current_line_changed = 1;
+}
+
+/**
+ * Edit the specified program line.
+ * EDIT <line>
+ */
+void cmd_edit(char *args) {
+  unsigned int line_number;
+  program_line *line;
+  if (isdigit(args[0])) {
+    sscanf(args, "%u", &line_number);
+    line = program;
+    while (line) {
+      if (line->number == line_number) {
+        sprintf(readline_buffer, "%u %s %s", line->number, keywords[line->command], line->args);
+        readline_reedit();
+        return;
+      }
+      line = line->next;
+    }
+    syntax_error_msg("Line not found!");
+  } else {
+    syntax_error();
+  }
 }

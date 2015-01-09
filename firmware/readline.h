@@ -6,5 +6,6 @@
 
 extern char * readline(unsigned char interruptible);
 extern char readline_buffer[];
+extern void readline_reedit();
 
 #endif

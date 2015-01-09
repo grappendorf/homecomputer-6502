@@ -1,3 +1,4 @@
+#include <string.h>
 #include "lcd.h"
 #include "keys.h"
 #include "readline.h"
@@ -6,6 +7,7 @@
 #define MAX_CHARS 79
 char readline_buffer[MAX_CHARS + 1];
 char *buffer_pos;
+unsigned char reedit = 0;
 
 void delete_character();
 
@@ -14,7 +16,12 @@ char * readline(unsigned char interruptible) {
   char last_char;
   unsigned char last_modifiers;
   reset_interrupted();
-  buffer_pos = readline_buffer;
+
+  if (reedit) {
+    reedit = 0;
+  } else {
+    buffer_pos = readline_buffer;
+  }
 
   for (;;) {
     if (interruptible && is_interrupted()) {
@@ -68,4 +75,10 @@ void delete_character() {
     lcd_putc(' ');
     lcd_goto(lcd_get_x() - 1, lcd_get_y());
   }
+}
+
+void readline_reedit() {
+  lcd_puts(readline_buffer);
+  buffer_pos = readline_buffer + strlen(readline_buffer);
+  reedit = 1;
 }
