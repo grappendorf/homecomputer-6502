@@ -63,6 +63,7 @@ void cmd_seed(char *args);
 void cmd_if(char *args);
 void cmd_end(char *args);
 void cmd_edit(char *args);
+void cmd_rem(char *args);
 
 typedef void (* command_function) ();
 
@@ -90,7 +91,8 @@ const command_function command_functions[] = {
   cmd_seed,
   cmd_if,
   cmd_end,
-  cmd_edit
+  cmd_edit,
+  cmd_rem
 };
 
 const char *keywords[] = {
@@ -118,6 +120,7 @@ const char *keywords[] = {
   "if",
   "end",
   "edit",
+  "rem",
   0
 };
 
@@ -1213,4 +1216,11 @@ void cmd_edit(char *args) {
   } else {
     syntax_error();
   }
+}
+
+/**
+ * Comment a line. The argument is ignored, this command does nothing.
+ * REM <comment>
+ */
+void cmd_rem(char *) {
 }
