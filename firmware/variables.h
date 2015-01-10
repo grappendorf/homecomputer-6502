@@ -30,6 +30,5 @@ extern void clear_variables();
 extern void print_all_variables();
 extern char * get_string_variable_value(variable *var);
 extern int get_integer_variable_value(variable *var);
-void seed_random_number_variable(unsigned int seed);
 
 #endif

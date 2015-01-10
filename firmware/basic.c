@@ -64,6 +64,7 @@ void cmd_if(char *args);
 void cmd_end(char *args);
 void cmd_edit(char *args);
 void cmd_rem(char *args);
+void cmd_write(char *args);
 
 typedef void (* command_function) ();
 
@@ -92,7 +93,8 @@ const command_function command_functions[] = {
   cmd_if,
   cmd_end,
   cmd_edit,
-  cmd_rem
+  cmd_rem,
+  cmd_write
 };
 
 const char *keywords[] = {
@@ -121,6 +123,7 @@ const char *keywords[] = {
   "end",
   "edit",
   "rem",
+  "write",
   0
 };
 
@@ -142,6 +145,8 @@ program_line * program = NULL;
 program_line * current_line;
 
 unsigned char current_line_changed;
+
+unsigned char running = 0;
 
 unsigned char error = 0;
 
@@ -190,6 +195,7 @@ void interpret(char *s) {
 
   error = 0;
   current_line = 0;
+  running = 0;
 
   if (strlen(s) == 0) {
     return;
@@ -230,7 +236,9 @@ void execute(char *s) {
  * Print "Ready."
  */
 void print_ready() {
-  lcd_puts("Ready.\n");
+  if (! running) {
+    lcd_puts("Ready.\n");
+  }
 }
 
 /**
@@ -801,6 +809,7 @@ void cmd_list(char *args) {
 void cmd_run(char *) {
   unsigned char command;
   error = 0;
+  running = 1;
   current_line = program;
   current_line_changed = 0;
   while (current_line) {
@@ -1163,7 +1172,7 @@ void cmd_cursor(char *args) {
 void cmd_seed(char *args) {
   int seed;
   if (parse_number_expression(args, &seed)) {
-    seed_random_number_variable(seed);
+    srand(seed);
   }
 }
 
@@ -1223,4 +1232,20 @@ void cmd_edit(char *args) {
  * REM <comment>
  */
 void cmd_rem(char *) {
+}
+
+/**
+ * Write a character (first character of the evaluated string) at the current cursor
+ * position. Do not move the cursor.
+ * WRITE "<string expression>"
+ */
+void cmd_write(char *args) {
+  char *value;
+  if (parse_string_expression(args, &value)) {
+    if (strlen(value) > 0) {
+      lcd_write(value[0]);
+    } else {
+      syntax_error_invalid_argument();
+    }
+  }
 }

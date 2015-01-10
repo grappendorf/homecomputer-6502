@@ -151,21 +151,11 @@ int builtin_var_time_integer() {
   return time_millis();
 }
 
-static unsigned int random_number;
-
 /**
  * Return the value of the builtin rn variable (random value).
  */
 int builtin_var_random_integer() {
-  random_number = random_number * 31421 + 6927;
-  return random_number & 32727;
-}
-
-/**
- * Supply a seed for the random number generator.
- */
-void seed_random_number_variable(unsigned int seed) {
-  random_number = seed;
+  return rand();
 }
 
 /**

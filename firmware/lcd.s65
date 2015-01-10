@@ -4,6 +4,7 @@
 
                     .export _lcd_init
                     .export _lcd_command
+                    .export _lcd_write
                     .export _lcd_puts
                     .export _lcd_putc
                     .export _lcd_put_newline
@@ -185,6 +186,21 @@ write_4bits:        sta tmp1
 ; Send a command to the display
 ; @in A (cmd) The command to send
 _lcd_command:       phaxy
+                    jsr command
+                    plaxy
+                    rts
+
+; void lcd_write(const char c)
+; Print the chatacter c onto the LCD. Do not move the cursor.
+; @in A (c) The character to write.
+; @mod tmp1, tmp2, ptr1
+_lcd_write:         phaxy
+                    jsr write
+                    ldy lcd_row
+                    lda lcd_column
+                    clc
+                    adc row_offsets,y
+                    adc #CMD_SETDDRAMADDR
                     jsr command
                     plaxy
                     rts

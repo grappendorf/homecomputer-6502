@@ -3,6 +3,7 @@
 
 extern void lcd_init();
 extern void __fastcall__ lcd_command(unsigned char cmd);
+extern void __fastcall__ lcd_write(char c);
 extern void __fastcall__ lcd_putc(char c);
 extern void __fastcall__ lcd_puts(const char * s);
 extern void lcd_put_newline();
