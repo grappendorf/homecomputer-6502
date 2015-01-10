@@ -15,17 +15,15 @@
 #include "basic.h"
 #include "debug.h"
 
-void basic_init();
-void interpret(char *s);
 void execute(char *s);
 void print_ready();
 void print_interrupted();
 
 char *parse_number_expression(char *s, int *value);
 char *parse_number_term(char *s, int *value);
+char *parse_integer(char *s, int *value);
 char *parse_string_expression(char *s, char **value);
 char *parse_string(char *s, char *value);
-char *parse_integer(char *s, int *value);
 char *parse_variable(char *s, unsigned int *name, unsigned char *type);
 unsigned char next_token(char *s);
 char *consume_token(char *s, unsigned char token);
@@ -33,12 +31,10 @@ char * skip_whitespace(char *s);
 char * find_args(char *s);
 unsigned char find_keyword(char *s);
 
-void syntax_error_msg(char *msg);
-void syntax_error();
-#define syntax_error_invalid_token() syntax_error_msg("Invalid token!")
-#define syntax_error_invalid_string() syntax_error_msg("Invalid string expression!")
-#define syntax_error_invalid_number() syntax_error_msg("Invalid number expression!")
-#define syntax_error_invalid_argument() syntax_error_msg("Invalid argument!")
+void syntax_error_invalid_token(unsigned char token);
+#define syntax_error_invalid_string() syntax_error_msg("Invalid string expression")
+#define syntax_error_invalid_number() syntax_error_msg("Invalid number expression")
+#define syntax_error_invalid_argument() syntax_error_msg("Invalid argument")
 
 void delete_line(unsigned int line_number);
 void create_line(unsigned int line_number, char *s);
@@ -129,6 +125,7 @@ const char *keywords[] = {
 
 char print_buffer[41];
 char parsebuf[256];
+char tmpbuf[256];
 
 typedef struct _program_line {
   unsigned int number;
@@ -145,27 +142,33 @@ unsigned char current_line_changed;
 
 unsigned char error = 0;
 
-#define TOKEN_END           0
-#define TOKEN_DIGITS        1
-#define TOKEN_STRING        2
-#define TOKEN_VAR_NUMBER    3
-#define TOKEN_VAR_STRING    4
-#define TOKEN_ASSIGN        5
-#define TOKEN_PLUS          6
-#define TOKEN_MINUS         7
-#define TOKEN_MUL           8
-#define TOKEN_DIV           9
-#define TOKEN_MOD           10
-#define TOKEN_COMMA         11
-#define TOKEN_EQUAL         12
-#define TOKEN_NOTEQUAL      13
-#define TOKEN_LESS          14
-#define TOKEN_LESSEQUAL     15
-#define TOKEN_GREATER       16
-#define TOKEN_GREATEREQUAL  17
-#define TOKEN_THEN          18
-#define TOKEN_ONERROR       19
-#define TOKEN_INVALID       0xFF;
+#define TOKEN_INVALID       0
+#define TOKEN_END           1
+#define TOKEN_DIGITS        2
+#define TOKEN_STRING        3
+#define TOKEN_VAR_NUMBER    4
+#define TOKEN_VAR_STRING    5
+#define TOKEN_ASSIGN        6
+#define TOKEN_PLUS          7
+#define TOKEN_MINUS         8
+#define TOKEN_MUL           9
+#define TOKEN_DIV           10
+#define TOKEN_MOD           11
+#define TOKEN_COMMA         12
+#define TOKEN_EQUAL         13
+#define TOKEN_NOTEQUAL      14
+#define TOKEN_LESS          15
+#define TOKEN_LESSEQUAL     16
+#define TOKEN_GREATER       17
+#define TOKEN_GREATEREQUAL  18
+#define TOKEN_THEN          19
+#define TOKEN_ONERROR       20
+
+const char *token_strings[] = {
+  "Unknown token", ";", "digits", "string", "number variable", "string variable",
+  "=", "+", "-", "*", "/", "%", ",", "==", "!=",
+  "<", "<=", ">", ">=", "then", "onerror"
+};
 
 /**
  * Initialize the BASIC interpreter.
@@ -241,66 +244,106 @@ void print_interrupted() {
  * Return NULL if a syntax error occurred.
  */
 char *parse_number_expression(char *s, int *value) {
-  unsigned char token;
-  int operand;
-  if (s = parse_number_term(s, value)) {
-    for (;;) {
-      token = next_token(s);
-      switch (token) {
-        case TOKEN_PLUS:
-        case TOKEN_MINUS:
-        case TOKEN_MUL:
-        case TOKEN_DIV:
-        case TOKEN_MOD:
-        case TOKEN_EQUAL:
-        case TOKEN_LESS:
-        case TOKEN_LESSEQUAL:
-        case TOKEN_GREATER:
-        case TOKEN_GREATEREQUAL:
-          s = consume_token(s, token);
-          if (s = parse_number_term(s, &operand)) {
-            switch (token) {
-              case TOKEN_PLUS:
-                *value += operand;
-                break;
-              case TOKEN_MINUS:
-                *value -= operand;
-                break;
-              case TOKEN_MUL:
-                *value *= operand;
-                break;
-              case TOKEN_DIV:
-                *value /= operand;
-                break;
-              case TOKEN_MOD:
-                *value %= operand;
-                break;
-              case TOKEN_EQUAL:
-                *value = *value == operand;
-                break;
-              case TOKEN_NOTEQUAL:
-                *value = *value != operand;
-                break;
-              case TOKEN_LESS:
-                *value = *value < operand;
-                break;
-              case TOKEN_LESSEQUAL:
-                *value = *value <= operand;
-                break;
-              case TOKEN_GREATER:
-                *value = *value > operand;
-                break;
-              case TOKEN_GREATEREQUAL:
-                *value = *value >= operand;
-                break;
+  unsigned char token = next_token(s);
+
+  if (token == TOKEN_DIGITS || token == TOKEN_PLUS || token == TOKEN_MINUS ||
+      token == TOKEN_VAR_NUMBER) {
+    int operand;
+    if (s = parse_number_term(s, value)) {
+      for (;;) {
+        token = next_token(s);
+        switch (token) {
+          case TOKEN_PLUS:
+          case TOKEN_MINUS:
+          case TOKEN_MUL:
+          case TOKEN_DIV:
+          case TOKEN_MOD:
+          case TOKEN_EQUAL:
+          case TOKEN_LESS:
+          case TOKEN_LESSEQUAL:
+          case TOKEN_GREATER:
+          case TOKEN_GREATEREQUAL:
+            s = consume_token(s, token);
+            if (s = parse_number_term(s, &operand)) {
+              switch (token) {
+                case TOKEN_PLUS:
+                  *value += operand;
+                  break;
+                case TOKEN_MINUS:
+                  *value -= operand;
+                  break;
+                case TOKEN_MUL:
+                  *value *= operand;
+                  break;
+                case TOKEN_DIV:
+                  *value /= operand;
+                  break;
+                case TOKEN_MOD:
+                  *value %= operand;
+                  break;
+                case TOKEN_EQUAL:
+                  *value = *value == operand;
+                  break;
+                case TOKEN_NOTEQUAL:
+                  *value = *value != operand;
+                  break;
+                case TOKEN_LESS:
+                  *value = *value < operand;
+                  break;
+                case TOKEN_LESSEQUAL:
+                  *value = *value <= operand;
+                  break;
+                case TOKEN_GREATER:
+                  *value = *value > operand;
+                  break;
+                case TOKEN_GREATEREQUAL:
+                  *value = *value >= operand;
+                  break;
+              }
             }
+            break;
+          default:
+            return s;
+        }
+      }
+      return s;
+    }
+  } else if (token == TOKEN_STRING || token == TOKEN_VAR_STRING) {
+    char *string;
+    if (s = parse_string_expression(s, &string)) {
+      token = next_token(s);
+      if (token == TOKEN_EQUAL || token == TOKEN_NOTEQUAL ||
+          token == TOKEN_LESS || token == TOKEN_LESSEQUAL ||
+          token == TOKEN_GREATER || token == TOKEN_GREATEREQUAL) {
+        s = consume_token(s, token);
+        strcpy(tmpbuf, string);
+        if (s = parse_string_expression(s, &string)) {
+          switch (token) {
+            case TOKEN_EQUAL:
+              *value = strcmp(tmpbuf, string) == 0;
+              break;
+            case TOKEN_NOTEQUAL:
+              *value = strcmp(tmpbuf, string) != 0;
+              break;
+            case TOKEN_LESS:
+              *value = strcmp(tmpbuf, string) < 0;
+              break;
+            case TOKEN_LESSEQUAL:
+              *value = strcmp(tmpbuf, string) <= 0;
+              break;
+            case TOKEN_GREATER:
+              *value = strcmp(tmpbuf, string) > 0;
+              break;
+            case TOKEN_GREATEREQUAL:
+              *value = strcmp(tmpbuf, string) >= 0;
+              break;
           }
-          break;
-        default:
           return s;
+        }
+      } else {
+        syntax_error_invalid_token(token);
       }
     }
-    return s;
   }
   return NULL;
 }
@@ -325,7 +368,7 @@ char *parse_number_term(char *s, int *value) {
       *value = get_integer_variable_value(var);
       return s;
     } else {
-      syntax_error_msg("Variable not found!");
+      syntax_error_msg("Variable not found");
     }
   } else {
     syntax_error();
@@ -344,22 +387,26 @@ char *parse_string_expression(char *s, char **value) {
   unsigned int var_name;
   variable *var;
   unsigned char var_type;
+  unsigned char token;
+
   s = skip_whitespace(s);
-  if (next_token(s) == TOKEN_STRING) {
+  token = next_token(s);
+
+  if (token == TOKEN_STRING) {
     if (s = parse_string(s, parsebuf)) {
       *value = parsebuf;
       return s;
     } else {
       syntax_error_invalid_string();
     }
-  } else if (next_token(s) == TOKEN_VAR_STRING) {
+  } else if (token == TOKEN_VAR_STRING) {
     s = parse_variable(s, &var_name, &var_type);
     var = find_variable(var_name, VAR_TYPE_STRING, NULL);
     if (var) {
       *value = get_string_variable_value(var);
       return s;
     } else {
-      syntax_error_msg("Variable not found!");
+      syntax_error_msg("Variable not found");
     }
   } else {
     syntax_error();
@@ -468,7 +515,7 @@ char *consume_token(char *s, unsigned char token) {
   } else if (token == TOKEN_ONERROR && strncmp(s, "onerror", 7) == 0) {
     return s + 7;
   }
-  syntax_error_invalid_token();
+  syntax_error_invalid_token(next_token(s));
   return NULL;
 }
 
@@ -570,21 +617,29 @@ unsigned char find_keyword(char *s) {
 /**
  * Print the error message 'msg' and set the error flag.
  */
-void syntax_error_msg(char *msg) {
+void syntax_error_msg_with_arg(const char *msg, const char *msg_arg) {
   error = 1;
   if (current_line) {
     sprintf(print_buffer, "%u: ", current_line->number);
     lcd_puts(print_buffer);
   }
   lcd_puts(msg);
-  lcd_puts("\n");
+  if (msg_arg) {
+    lcd_puts(msg_arg);
+  }
+  lcd_puts("!\n");
 }
 
 /**
  * Print the standard error message and set the error flag.
  */
 void syntax_error() {
-  syntax_error_msg("Syntax error!");
+  syntax_error_msg("Syntax error");
+}
+
+void syntax_error_invalid_token(unsigned char token) {
+  const char *token_string = token_strings[token];
+  syntax_error_msg_with_arg("Invalid token: ", token_string);
 }
 
 /**
@@ -786,7 +841,7 @@ void cmd_goto(char *args) {
       }
       line = line->next;
     }
-    syntax_error_msg("Line not found!");
+    syntax_error_msg("Line not found");
   } else {
     syntax_error();
   }
@@ -861,7 +916,7 @@ void cmd_load(char *args) {
         break;
       } else if (strncmp("!NOTFOUND", readline_buffer, 9) == 0) {
         lcd_put_newline();
-        syntax_error_msg("File not found!");
+        syntax_error_msg("File not found");
         break;
       } else {
         lcd_putc('.');
@@ -1154,7 +1209,7 @@ void cmd_edit(char *args) {
       }
       line = line->next;
     }
-    syntax_error_msg("Line not found!");
+    syntax_error_msg("Line not found");
   } else {
     syntax_error();
   }
