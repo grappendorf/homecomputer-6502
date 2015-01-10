@@ -19,6 +19,7 @@ void basic_init();
 void interpret(char *s);
 void execute(char *s);
 void print_ready();
+void print_interrupted();
 
 char *parse_number_expression(char *s, int *value);
 char *parse_number_term(char *s, int *value);
@@ -163,6 +164,7 @@ unsigned char error = 0;
 #define TOKEN_GREATER       16
 #define TOKEN_GREATEREQUAL  17
 #define TOKEN_THEN          18
+#define TOKEN_ONERROR       19
 #define TOKEN_INVALID       0xFF;
 
 /**
@@ -223,6 +225,13 @@ void execute(char *s) {
  */
 void print_ready() {
   lcd_puts("Ready.\n");
+}
+
+/**
+ * Print "Interrupted."
+ */
+void print_interrupted() {
+  lcd_puts("Interrupted.\n");
 }
 
 /**
@@ -454,8 +463,10 @@ char *consume_token(char *s, unsigned char token) {
     return s + 1;
   } else if (token == TOKEN_GREATEREQUAL && *s == '>' && *(s + 1) == '=') {
     return s + 2;
-  } else if (strncmp(s, "then", 4) == 0) {
+  } else if (token == TOKEN_THEN && strncmp(s, "then", 4) == 0) {
     return s + 4;
+  } else if (token == TOKEN_ONERROR && strncmp(s, "onerror", 7) == 0) {
+    return s + 7;
   }
   syntax_error_invalid_token();
   return NULL;
@@ -468,8 +479,10 @@ unsigned char next_token(char *s) {
   s = skip_whitespace(s);
   if(isdigit(*s)){
     return TOKEN_DIGITS;
-  } else if (*s == '"') {
-    return TOKEN_STRING;
+  } else if (strncasecmp(s, "then", 4) == 0) {
+    return TOKEN_THEN;
+  } else if (strncasecmp(s, "onerror", 7) == 0) {
+    return TOKEN_ONERROR;
   } else if (isalpha(*s)) {
     while (isalnum(*s)) { ++s; }
     if (*s == '$') {
@@ -477,6 +490,8 @@ unsigned char next_token(char *s) {
     } else {
       return TOKEN_VAR_NUMBER;
     }
+  } else if (*s == '"') {
+    return TOKEN_STRING;
   } else if (*s == '=') {
     ++s;
     if (*s == '=') {
@@ -509,8 +524,6 @@ unsigned char next_token(char *s) {
     return TOKEN_COMMA;
   } else if (*s == '\0' || *s == ';') {
     return TOKEN_END;
-  } else if (strncasecmp(s, "then", 4) == 0) {
-    return TOKEN_THEN;
   }
   return TOKEN_INVALID;
 }
@@ -708,7 +721,7 @@ void cmd_list(char *args) {
       } else {
         do {
           if (is_interrupted()) {
-            lcd_puts("Interrupted.\n");
+            print_interrupted();
             return;
           }
           keys_update();
@@ -734,7 +747,7 @@ void cmd_run(char *) {
   current_line_changed = 0;
   while (current_line) {
     if (is_interrupted()) {
-      lcd_puts("Interrupted.\n");
+      print_interrupted();
       lcd_cursor_blink();
       break;
     }
@@ -886,7 +899,7 @@ void cmd_dir(char *) {
         do {
           if (is_interrupted()) {
             acia_puts("*BREAK\n");
-            lcd_puts("Interrupted.\n");
+            print_interrupted();
             return;
           }
           keys_update();
@@ -1007,19 +1020,37 @@ void cmd_clear(char *) {
 
 /**
  * Input a variable from the keyboard.
+ * INPUT <variable> [ONERROR <command]
  */
 void cmd_input(char *args) {
   unsigned int var_name;
   unsigned char var_type;
+
   args = parse_variable(args, &var_name, &var_type);
   if (args) {
-    char *line = readline(INTERRUPTIBLE);
     if (var_type == VAR_TYPE_STRING) {
+      char *line = readline(INTERRUPTIBLE);
       create_variable(var_name, var_type, line);
     } else if (var_type == VAR_TYPE_INTEGER) {
-      int value = 0;
-      if (parse_integer(line, &value)) {
-        create_variable(var_name, var_type, &value);
+      for (;;) {
+        int value = 0;
+        char *line = readline(INTERRUPTIBLE);
+        if (is_interrupted()) {
+          break;
+        }
+        if (parse_integer(line, &value)) {
+          create_variable(var_name, var_type, &value);
+          break;
+        } else {
+          if (next_token(args) == TOKEN_ONERROR) {
+            args = consume_token(args, TOKEN_ONERROR);
+            execute(args);
+            break;
+          } else {
+            syntax_error_invalid_number();
+            lcd_puts("Enter again: ");
+          }
+        }
       }
     } else {
       syntax_error_invalid_argument();
