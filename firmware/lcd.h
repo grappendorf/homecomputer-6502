@@ -15,5 +15,6 @@ extern void lcd_cursor_blink();
 extern void lcd_cursor_off();
 extern unsigned char lcd_get_x();
 extern unsigned char lcd_get_y();
+extern unsigned char __fastcall__ lcd_getc(unsigned char x, unsigned char y);
 
 #endif

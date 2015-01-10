@@ -1134,21 +1134,41 @@ void cmd_input(char *args) {
 void cmd_at(char *args) {
   int x;
   int y;
+  unsigned char token;
+
   args = parse_number_expression(args, &x);
   if (!args || x < 0 || x > 39) {
     syntax_error_invalid_argument();
     return;
   }
+
   args = consume_token(args, TOKEN_COMMA);
   if (! args) {
     return;
   }
+
   args = parse_number_expression(args, &y);
   if (!args || y < 0 || y > 3) {
-    syntax_error();
+    syntax_error_invalid_argument();
     return;
   }
-  lcd_goto(x, y);
+
+  if (next_token(args) == TOKEN_COMMA) {
+    args = consume_token(args, TOKEN_COMMA);
+    if ((token = next_token(args)) == TOKEN_VAR_STRING) {
+      unsigned int var_name;
+      unsigned char var_type;
+      if (args = parse_variable(args, &var_name, &var_type)) {
+        char c = lcd_getc(x, y);
+        sprintf (print_buffer, "%c", c);
+        create_variable(var_name, VAR_TYPE_STRING, print_buffer);
+      }
+    } else {
+      syntax_error_invalid_token(token);
+    }
+  } else {
+    lcd_goto(x, y);
+  }
 }
 
 /**

@@ -15,6 +15,7 @@
                     .export _lcd_cursor_off
                     .export _lcd_get_x
                     .export _lcd_get_y
+                    .export _lcd_getc
 
                     .import popa
                     .import _delay_ms
@@ -409,4 +410,25 @@ _lcd_get_x:         lda lcd_column
 ; Get the current display row
 ; @out A row
 _lcd_get_y:         lda lcd_row
+                    rts
+
+; char lcd_getc(unsigned char x, unsigned char y)
+; Get the character at the position x,y
+; @in popa (x) The column
+; @in A (y) The row
+; @out A the character at x,y
+; @mod tmp1
+_lcd_getc:          phx
+                    sta tmp1
+                    jsr popa
+                    ldx tmp1
+                    beq @l1
+@l2:                clc
+                    adc #40
+                    dex
+                    bne @l2
+@l1:                tax
+                    lda display_data,x
+                    ldx tmp1
+                    plx
                     rts
