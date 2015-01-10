@@ -13,4 +13,4 @@ This repositiory contains the following files:
 * schematics - PDF schematics
 * case - 123D/STL design files for the case
 * firmware - Minimal BASIC interpreter written with CC65,  different versions of the firmware during the development process
-* terminal -  Small ruby script for loading/saving of BASIC programs
+* terminal -  Small ruby script for loading/saving of BASIC programs, example BASIC programs
