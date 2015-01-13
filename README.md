@@ -1,6 +1,8 @@
 HomeComputer 6502
 =================
 
+![HomeComputer 6502](homecomputer-6502.jpg)
+
 This is my attempt to build a simple, mobile microcomputer system with an 8-bit MOS 6502 CPU that was used in many popular
 home computers of the 1970s and 1980s like the Commodore 64 or the Apple II.
 
