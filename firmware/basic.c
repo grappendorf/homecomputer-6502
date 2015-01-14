@@ -66,8 +66,10 @@ void cmd_edit(char *args);
 void cmd_rem(char *args);
 void cmd_write(char *args);
 
+// Basic command function type
 typedef void (* command_function) ();
 
+// Basic command function table
 const command_function command_functions[] = {
   cmd_goto,
   cmd_run,
@@ -97,6 +99,7 @@ const command_function command_functions[] = {
   cmd_write
 };
 
+// Basic command keyword table
 const char *keywords[] = {
   "goto",
   "run",
@@ -127,12 +130,19 @@ const char *keywords[] = {
   0
 };
 
+// Return value of find_keyword() if the keyword wasn't found
 #define CMD_UNKNOWN 0xFF
 
+// Buffer used for priting messages to the LCD
 char print_buffer[41];
+
+// Buffer used for language parsing
 char parsebuf[256];
+
+// Temporary buffer
 char tmpbuf[256];
 
+// Data structure holding one line of BASIC code
 typedef struct _program_line {
   unsigned int number;
   unsigned char command;
@@ -140,16 +150,22 @@ typedef struct _program_line {
   struct _program_line * next;
 } program_line;
 
+// Pointer to the first BASIC line
 program_line * program = NULL;
 
+// Current line during program execution
 program_line * current_line;
 
+// True if command has changed the current line
 unsigned char current_line_changed;
 
+// True if a program is running
 unsigned char running = 0;
 
+// True if an error occourred
 unsigned char error = 0;
 
+// Language tokens
 #define TOKEN_INVALID       0
 #define TOKEN_END           1
 #define TOKEN_DIGITS        2
@@ -172,6 +188,7 @@ unsigned char error = 0;
 #define TOKEN_THEN          19
 #define TOKEN_ONERROR       20
 
+// Descriptions of the tokens used in error messages
 const char *token_strings[] = {
   "Unknown token", ";", "digits", "string", "number variable", "string variable",
   "=", "+", "-", "*", "/", "%", ",", "==", "!=",
@@ -359,6 +376,11 @@ char *parse_number_expression(char *s, int *value) {
   return NULL;
 }
 
+/**
+ * Parse the number term 's' and return its resulting value in 'value'.
+ * Return a pointer behind the last character of the expression.
+ * Return NULL if a syntax error occurred.
+ */
 char *parse_number_term(char *s, int *value) {
   unsigned char token;
   s = skip_whitespace(s);
