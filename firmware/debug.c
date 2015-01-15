@@ -7,6 +7,9 @@
 
 char outbuf[41];
 
+/**
+ * Print the current  key code.
+ */
 void debug_keys() {
   for (;;) {
     keys_update();
@@ -16,6 +19,9 @@ void debug_keys() {
   }
 }
 
+/**
+ * Print the state of the keyboard matrix.
+ */
 void debug_key_matrix() {
   unsigned char row;
   unsigned char columns;
@@ -38,6 +44,9 @@ void debug_key_matrix() {
 unsigned char led = 0;
 unsigned long next_blink_millis = 0;
 
+/**
+ * Blink the led.
+ */
 void debug_blink() {
   if (time_millis() > next_blink_millis) {
     next_blink_millis = time_millis() + 500;

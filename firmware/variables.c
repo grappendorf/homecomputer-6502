@@ -8,6 +8,7 @@
 #include "keys.h"
 #include "variables.h"
 
+// Pointer to the list of variables
 variable *variables = NULL;
 
 /**

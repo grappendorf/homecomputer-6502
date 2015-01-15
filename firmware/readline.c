@@ -5,12 +5,6 @@
 #include "interrupt.h"
 #include "debug.h"
 
-#define MAX_CHARS 79
-char readline_buffer[MAX_CHARS + 1];
-char *buffer_end;
-char *buffer_pos;
-unsigned char reedit = 0;
-
 void insert_character(char c);
 void delete_prev_character();
 void delete_character();
@@ -20,6 +14,26 @@ void cursor_right();
 void cursor_start();
 void cursor_end();
 
+// Maximum number of characters in the input buffer
+#define MAX_CHARS 79
+
+// Input buffer
+char readline_buffer[MAX_CHARS + 1];
+
+// A pointer to the last valid character in the input buffer
+char *buffer_end;
+
+// A pointer to the cursor position in the input buffer
+char *buffer_pos;
+
+// If true the next call to readline() re-displays the input buffer
+unsigned char reedit = 0;
+
+/**
+ * Lets the user edit an input line with MAX_CHARS characters.
+ * A Pointer to the input line buffer is returned from readline().
+ * If interruptible is true, the input can be canceled with an NMI.
+ */
 char * readline(unsigned char interruptible) {
   unsigned char last_key = KEY_NONE;
   char last_char;
@@ -79,6 +93,10 @@ char * readline(unsigned char interruptible) {
   return readline_buffer;
 }
 
+/**
+ * Insert the character c at the current cursor position.
+ * Move all following characters to the right.
+ */
 void insert_character(char c) {
   if (buffer_end - readline_buffer < MAX_CHARS) {
     if (buffer_pos < buffer_end) {
@@ -115,6 +133,10 @@ void insert_character(char c) {
   }
 }
 
+/**
+ * Delete the character at the cursor position.
+ * Move all following  characters to the left.
+ */
 void delete_prev_character() {
   if (buffer_pos > readline_buffer) {
     if (buffer_pos == buffer_end) {
@@ -155,6 +177,11 @@ void delete_prev_character() {
   }
 }
 
+/**
+ * Delete the character left to the cursor.
+ * Move the character at the cursor and all following  characters
+ * to the left.
+ */
 void delete_character() {
   if (buffer_pos < buffer_end) {
     char *pos;
@@ -174,12 +201,18 @@ void delete_character() {
   }
 }
 
+/**
+ * Clear the input buffer.
+ */
 void delete_all_characters() {
   while (buffer_pos != readline_buffer) {
     delete_prev_character();
   }
 }
 
+/**
+ * Move the cursor one position to the left.
+ */
 void cursor_left() {
   if (buffer_pos > readline_buffer) {
     --buffer_pos;
@@ -191,6 +224,9 @@ void cursor_left() {
   }
 }
 
+/**
+ * Move the cursor one position to the right.
+ */
 void cursor_right() {
   if (buffer_pos < buffer_end) {
     ++buffer_pos;
@@ -202,18 +238,28 @@ void cursor_right() {
   }
 }
 
+/**
+ * Move the cursor to the beginning of the input line.
+ */
 void cursor_start() {
   while (buffer_pos > readline_buffer) {
     cursor_left();
   }
 }
 
+/**
+ * Move the cursor to the end of the input line.
+ */
 void cursor_end() {
   while (buffer_pos < buffer_end) {
     cursor_right();
   }
 }
 
+/**
+ * Next time readline() is called, do not delete the input buffer.
+ * Instead let the user edit the old buffer.
+ */
 void readline_reedit() {
   lcd_puts(readline_buffer);
   buffer_pos = readline_buffer + strlen(readline_buffer);
