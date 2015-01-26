@@ -15,7 +15,7 @@ The software is written in 6502 assembler and C, with the help of the [CC65 comp
 
 The case is designed with [Autodesk 123D Design](http://www.123dapp.com/design).
 
-Documentation of this project can be found on my website: http://www.grappendorf.net/projects/6502-homecomputer
+Documentation of this project can be found on my website: http://www.grappendorf.net/projects/6502-home-computer
 
 This repositiory contains the following files:
 
